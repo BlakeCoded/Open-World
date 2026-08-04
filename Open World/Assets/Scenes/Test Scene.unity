@@ -275,7 +275,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3631ece5fb22fdc4e8f0a95acbf3f610, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunkManager
+  ChunkViewDistance: 5
+  updateInterval: 0.25
+  batchAmount: 5
   Player: {fileID: 2047461712}
+  defaultMat: {fileID: 2100000, guid: cc6fa2c3701fce14a816cf4bbb685692, type: 2}
 --- !u!4 &1428547929
 Transform:
   m_ObjectHideFlags: 0
@@ -409,8 +413,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1930453354}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.08717229, y: 0.8995905, z: -0.21045253, w: -0.37262273}
-  m_LocalPosition: {x: 12.674485, y: 8.872139, z: 12.674486}
+  m_LocalRotation: {x: 0.002783032, y: 0.9552032, z: -0.2958045, w: 0.008876055}
+  m_LocalPosition: {x: 24.69725, y: 12.175373, z: 41.31038}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -568,7 +572,7 @@ Transform:
   m_GameObject: {fileID: 2047461712}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: 0}
+  m_LocalPosition: {x: 25, y: 1, z: 25}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
