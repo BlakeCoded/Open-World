@@ -30,7 +30,7 @@ public class ChunkManager : MonoBehaviourSingleton<ChunkManager>
         // Init seeds
     }
 
-    private void Update()
+    private void Update() 
     {
         UpdateCurrentChunk();
         RefreshWantedChunks();
@@ -51,7 +51,7 @@ public class ChunkManager : MonoBehaviourSingleton<ChunkManager>
         MeshFilter meshFilter = go.AddComponent<MeshFilter>();
         MeshRenderer meshRenderer = go.AddComponent<MeshRenderer>();
 
-        float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, key, 5f);
+        float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, key);
 
         Mesh mesh = TerrainMeshGenerator.CreateMeshTerrain(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, heights);
 

@@ -275,7 +275,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3631ece5fb22fdc4e8f0a95acbf3f610, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunkManager
-  ChunkViewDistance: 5
+  ChunkViewDistance: 2
   updateInterval: 0.25
   batchAmount: 5
   Player: {fileID: 2047461712}

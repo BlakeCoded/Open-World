@@ -4,22 +4,35 @@ namespace Project.Terrain
 {
     public static class TerrainHeightGenerator
     {
-        public static float[] CreateHeights(float chunkSize, int verts, Vector2Int chunkCoord, float scale)
+        public static float[] CreateHeights(float chunkSize, int verts, Vector2Int chunkCoord)
         {
-            float[] heights = new float[verts * verts];
+            int borderedVerts = verts + 2;
+
+            float[] heights = new float[borderedVerts * borderedVerts];
 
             int index = 0;
+            float step = chunkSize / (verts - 1);
 
-            for(int z = 0; z < verts; z++)
-                for(int x = 0; x < verts; x++)
+            for(int z = -1; z <= verts; z++)
+                for(int x = -1; x <= verts; x++)
                 {
-                    float worldX = chunkCoord.x * chunkSize + x;
-                    float worldY = chunkCoord.y * chunkSize + z;
+                    float worldX = chunkCoord.x * chunkSize + x * step;
+                    float worldZ = chunkCoord.y * chunkSize + z * step;
 
-                    heights[index++] = Mathf.PerlinNoise(worldX * scale, worldY * scale);
+                    heights[index++] = SampleHeight(worldX, worldZ);
                 }
 
             return heights;
+        }
+
+        const float NoiseOffset = 10000f;
+
+        public static float SampleHeight(float worldX, float worldZ)
+        {
+            float noiseScale = 0.01f;
+            float heightMultiplier = 20f;
+
+            return Mathf.PerlinNoise((worldX + NoiseOffset) * noiseScale, (worldZ + NoiseOffset) * noiseScale) * heightMultiplier;
         }
     }
 }

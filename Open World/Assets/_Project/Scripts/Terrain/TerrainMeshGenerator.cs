@@ -102,6 +102,8 @@ namespace Project.Terrain
             Mesh mesh = new Mesh();
 
             int index = 0;
+            int heightIndex = 0;
+            int borderedVerts = verts + 2;
             float step = size / (verts - 1);
 
             Vector3[] verticies = new Vector3[verts * verts];
@@ -109,9 +111,9 @@ namespace Project.Terrain
             for (int z = 0; z < verts; z++)
                 for (int x = 0; x < verts; x++)
                 {
-                    verticies[index++] = new Vector3(x * step, heights[index - 1], z * step);
+                    heightIndex = (z + 1) * borderedVerts + (x + 1);
+                    verticies[index++] = new Vector3(x * step, heights[heightIndex], z * step);
                 }
-
 
             int[] triangles = new int[(verts - 1) * (verts - 1) * 6];
 
@@ -137,9 +139,43 @@ namespace Project.Terrain
 
             mesh.vertices = verticies;
             mesh.triangles = triangles;
-            mesh.RecalculateNormals();
+            mesh.normals = CalculateNormals(heights, verts);
 
             return mesh;
+        }
+
+        private static Vector3[] CalculateNormals(float[] heights, int verts)
+        {
+            int borderedVerts = verts + 2;
+
+            Vector3[] normals = new Vector3[verts * verts];
+
+            for (int z = 0; z < verts; z++)
+            {
+                for (int x = 0; x < verts; x++)
+                {
+                    int borderedX = x + 1;
+                    int borderedZ = z + 1;
+
+                    int center = borderedZ * borderedVerts + borderedX;
+
+                    float left = heights[center - 1];
+                    float right = heights[center + 1];
+
+                    float down = heights[center - borderedVerts];
+                    float up = heights[center + borderedVerts];
+
+                    Vector3 normal = new Vector3(
+                        left - right,
+                        2f,
+                        down - up
+                    ).normalized;
+
+                    normals[z * verts + x] = normal;
+                }
+            }
+
+            return normals;
         }
     }
 }
