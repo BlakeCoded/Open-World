@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Project.Terrain
+namespace WorldGen.Terrain
 {
     public static class TerrainMeshGenerator
     {

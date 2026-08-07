@@ -1,18 +1,13 @@
 using UnityEngine;
 
-namespace Project.Terrain
+namespace WorldGen.Terrain
 {
     public class ChunkData
     {
-        // Terrain GameObject
-        public Transform Transform { get; set; }
-        public GameObject GameObject { get; set; }
-        public MeshObject MeshObject { get; set; }
-        public MeshCollider MeshCollider { get; set; }
-
-        // Chunk Info
-        public Vector2Int Coord { get; set; }
-        public Bounds Bounds { get; set; }
+        public GameObject GameObject;
+        public Vector2Int Coord;
+        public ChunkRenderData RenderData;
+        public ChunkCullData CullData;
 
         public void OnLoad() 
         {
@@ -23,13 +18,13 @@ namespace Project.Terrain
             GameObject.SetActive(false);
         }
 
-        public void SetTransform(Transform transform) => Transform = transform;
-        public void SetGameObject(GameObject go) => GameObject = go;
-        public void SetMesh(Mesh mesh) => MeshObject.Mesh = mesh;
-        public void SetMeshRender(MeshRenderer meshRenderer) => MeshObject.MeshRenderer = meshRenderer;
-        public void SetMeshFilter(MeshFilter meshFilter) => MeshObject.MeshFilter = meshFilter;
-        public void SetMeshCollider(MeshCollider meshCollider) => MeshCollider = meshCollider;
         public void SetCoord(Vector2Int coord) => Coord = coord;
-        public void SetBounds(Bounds bounds) => Bounds = bounds;
+        public void SetGameObject(GameObject go) => GameObject = go;
+        public void SetMesh(Mesh mesh) => RenderData.Mesh = mesh;
+        public void SetMeshRender(MeshRenderer meshRenderer) => RenderData.MeshRenderer = meshRenderer;
+        public void SetMeshFilter(MeshFilter meshFilter) => RenderData.MeshFilter = meshFilter;
+        public void SetMeshCollider(MeshCollider meshCollider) => RenderData.MeshCollider = meshCollider;
+        public void SetMeshVisible(bool visable) { CullData.Visible = visable; RenderData.MeshRenderer.enabled = visable; }
+        public void SetBounds(Bounds bounds) { CullData.Bounds = bounds; }
     }
 }

@@ -1,8 +1,10 @@
 using UnityEngine;
 
-public class MeshObject
+public class ChunkRenderData
 {
     public Mesh Mesh;
+
     public MeshFilter MeshFilter;
     public MeshRenderer MeshRenderer;
+    public MeshCollider MeshCollider;
 }

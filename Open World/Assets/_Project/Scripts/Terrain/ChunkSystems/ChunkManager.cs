@@ -1,151 +1,73 @@
-using System.Collections.Generic;
 using UnityEngine;
+using System.Collections.Generic;
 using Project.Singleton;
-using Project.Terrain;
-using System;
 
-public class ChunkManager : MonoBehaviourSingleton<ChunkManager>
+namespace WorldGen.Terrain
 {
-    readonly Dictionary<Vector2Int, ChunkData> chunksById = new();
-    readonly HashSet<Vector2Int> activeIds = new();
-    readonly HashSet<Vector2Int> visibleChunks = new();
-    readonly HashSet<Vector2Int> wantedIds = new();
-    readonly HashSet<Vector2Int> removeIds = new();
-    readonly HashSet<Vector2Int> queuedIds = new();
-    readonly Queue<Vector2Int> buildQueue = new();
-
-    [Header("Streaming")]
-    [SerializeField] int ChunkViewDistance = 2;
-    [SerializeField] float updateInterval = 0.25f;
-    [SerializeField] int batchAmount = 5;
-
-    float refreshChunksTimer;
-    Vector2Int currentChunk;
-
-    [SerializeField] private GameObject Player;
-    [SerializeField] private Material defaultMat;
-
-    private void Awake()
+    // ChunkManager.cs
+    public partial class ChunkManager : MonoBehaviourSingleton<ChunkManager>
     {
-        // Init seeds
-    }
+        [Header("Data Structures")]
+        readonly Dictionary<Vector2Int, ChunkData> chunksById = new();
+        readonly HashSet<Vector2Int> activeIds = new();
+        readonly HashSet<Vector2Int> wantedIds = new();
+        readonly HashSet<Vector2Int> removeIds = new();
+        readonly HashSet<Vector2Int> queuedIds = new();
+        readonly HashSet<Vector2Int> visibleChunks = new();
+        readonly Queue<Vector2Int> buildQueue = new();
 
-    private void Update() 
-    {
-        UpdateCurrentChunk();
-        RefreshWantedChunks();
-        BuildQueuedChunks(batchAmount);
-    }
+        [SerializeField] private GameObject Player;
+        [SerializeField] private Material defaultMat;
 
-    private void UpdateCurrentChunk()
-    {
-        currentChunk = WorldToCoord(Player.transform.position);
-    }
-
-    private void BuildChunk(Vector2Int key)
-    {
-        if(chunksById.ContainsKey(key)) return;
-
-        GameObject go = new GameObject($"Chunk_{key.x}_{key.y}");
-
-        MeshFilter meshFilter = go.AddComponent<MeshFilter>();
-        MeshRenderer meshRenderer = go.AddComponent<MeshRenderer>();
-
-        float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, key);
-
-        Mesh mesh = TerrainMeshGenerator.CreateMeshTerrain(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, heights);
-
-        meshFilter.mesh = mesh;
-        meshRenderer.material = defaultMat;
-
-        var meshObject = new MeshObject
+        private void Awake()
         {
-            Mesh = mesh,
-            MeshFilter = meshFilter,
-            MeshRenderer = meshRenderer
-        };
-
-        var t = go.transform;
-        t.parent = transform;
-        t.position = CoordToWorld(key);
-
-        var chunk = new ChunkData
-        {
-            Coord = key,
-            GameObject = go,
-            MeshObject = meshObject,
-            Bounds = new Bounds(t.position, new Vector3(ChunkSettings.ChunkSizeInUnits, 100f, ChunkSettings.ChunkSizeInUnits)),
-        };
-
-        chunksById[key] = chunk;
-        activeIds.Add(key);
-
-        chunk.OnLoad();
-    }
-
-    private void RefreshWantedChunks()
-    {
-        refreshChunksTimer -= Time.deltaTime;
-        if (refreshChunksTimer >= 0f) return;
-        refreshChunksTimer = updateInterval;
-
-        wantedIds.Clear();
-        removeIds.Clear();
-
-        for (int dx = -ChunkViewDistance; dx <= ChunkViewDistance; dx++)
-            for (int dz = -ChunkViewDistance; dz <= ChunkViewDistance; dz++)
-            {
-                var id = new Vector2Int(currentChunk.x + dx, currentChunk.y + dz);
-                int cd = Mathf.Max(Mathf.Abs(dz), Mathf.Abs(dx));
-                if(cd <= ChunkViewDistance) wantedIds.Add(id); 
-            }
-
-        foreach(var id in activeIds)
-            if(!wantedIds.Contains(id))
-                removeIds.Add(id);
-
-        foreach(var id in removeIds)
-        {
-            chunksById[id].OnUnload();
-            activeIds.Remove(id);
+            cam = Camera.main;
+            InitalizeSeeds();
         }
 
-        foreach(var id in wantedIds)
+        private void Update() 
         {
-            if(chunksById.TryGetValue(id, out var chunk))
-            {
-                if(activeIds.Add(id)) chunk.OnLoad();
-            }
-            else if(queuedIds.Add(id))
-            {
-                buildQueue.Enqueue(id);
-            }
+            UpdateCameraChunk();
+            RefreshWantedChunks();
+            BuildQueuedChunks(batchAmount);
         }
-    }
 
-    private void BuildQueuedChunks(int batch)
-    {
-        int count = 0;
-        while(count < batch && buildQueue.Count > 0)
+        private void LateUpdate()
         {
-            var id = buildQueue.Dequeue();
-            if (activeIds.Contains(id)) continue;
-
-            BuildChunk(id);
-            count++;
+            UpdateVisibility();
         }
-    }
 
-    private Vector2Int WorldToCoord(Vector3 position)
-    {
-        return new Vector2Int(Mathf.FloorToInt(position.x / ChunkSettings.ChunkSizeInUnits),
-                              Mathf.FloorToInt(position.z / ChunkSettings.ChunkSizeInUnits));
-    }
+        private void InitalizeSeeds()
+        {
+            int seed = Random.Range(int.MinValue, int.MaxValue);
+            Random.InitState(seed);
+        }
 
-    private Vector3 CoordToWorld(Vector2Int coord)
-    {
-        return new Vector3(coord.x * ChunkSettings.ChunkSizeInUnits, 
-                           0f, 
-                           coord.y * ChunkSettings.ChunkSizeInUnits);
+        private Vector2Int WorldToCoord(Vector3 position)
+        {
+            return new Vector2Int(Mathf.FloorToInt(position.x / ChunkSettings.ChunkSizeInUnits),
+                                  Mathf.FloorToInt(position.z / ChunkSettings.ChunkSizeInUnits));
+        }
+
+        private Vector3 CoordToWorld(Vector2Int coord)
+        {
+            return new Vector3(coord.x * ChunkSettings.ChunkSizeInUnits, 
+                               0f, 
+                               coord.y * ChunkSettings.ChunkSizeInUnits);
+        }
+
+        private void OnDisable()
+        {
+            var keys = new List<Vector2Int>(chunksById.Keys);
+            foreach(var k in keys)
+            {
+                var c = chunksById[k];
+                if (c.GameObject) Destroy(c.GameObject);
+                chunksById.Remove(k);
+            }
+
+            activeIds.Clear();
+            visibleChunks.Clear();
+        }
     }
 }

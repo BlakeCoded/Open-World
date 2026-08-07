@@ -1,4 +1,6 @@
-namespace Project.Terrain
+using UnityEngine;
+
+namespace WorldGen.Terrain
 {
     public static class ChunkSettings 
     {
