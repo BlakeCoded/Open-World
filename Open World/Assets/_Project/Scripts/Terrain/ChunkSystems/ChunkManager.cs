@@ -8,7 +8,8 @@ namespace WorldGen.Terrain
     public partial class ChunkManager : MonoBehaviourSingleton<ChunkManager>
     {
         [Header("Data Structures")]
-        readonly Dictionary<Vector2Int, ChunkData> chunksById = new();
+        readonly Dictionary<Vector2Int, ChunkData> chunkDataByID = new();
+        readonly Dictionary<Vector2Int, ChunkView> activeChunkViews = new();
         readonly HashSet<Vector2Int> activeIds = new();
         readonly HashSet<Vector2Int> wantedIds = new();
         readonly HashSet<Vector2Int> removeIds = new();
@@ -17,7 +18,6 @@ namespace WorldGen.Terrain
         readonly Queue<Vector2Int> buildQueue = new();
 
         [SerializeField] private GameObject Player;
-        [SerializeField] private Material defaultMat;
 
         private void Awake()
         {
@@ -27,6 +27,8 @@ namespace WorldGen.Terrain
 
         private void Update() 
         {
+            CacheCamera();
+
             UpdateCameraChunk();
             RefreshWantedChunks();
             BuildQueuedChunks(batchAmount);
@@ -58,12 +60,11 @@ namespace WorldGen.Terrain
 
         private void OnDisable()
         {
-            var keys = new List<Vector2Int>(chunksById.Keys);
+            var keys = new List<Vector2Int>(chunkDataByID.Keys);
             foreach(var k in keys)
             {
-                var c = chunksById[k];
-                if (c.GameObject) Destroy(c.GameObject);
-                chunksById.Remove(k);
+                var c = chunkDataByID[k];
+                chunkDataByID.Remove(k);
             }
 
             activeIds.Clear();

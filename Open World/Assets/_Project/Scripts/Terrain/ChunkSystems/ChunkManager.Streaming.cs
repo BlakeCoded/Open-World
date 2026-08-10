@@ -1,5 +1,6 @@
 using Project.Singleton;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace WorldGen.Terrain
 {
@@ -12,6 +13,8 @@ namespace WorldGen.Terrain
         [SerializeField] int batchAmount = 5;
         [SerializeField] float cullPadding = 2f;
 
+        [SerializeField] GameObject chunkPrefab;
+
         Camera cam;
 
         float timer;
@@ -19,57 +22,66 @@ namespace WorldGen.Terrain
 
         private void UpdateCameraChunk()
         {
-            var newChunk = WorldToCoord(cam.transform.position);
+            var newChunk = WorldToCoord(camPos);
             if (newChunk != currentChunk) currentChunk = newChunk;
         }
 
         private void BuildChunk(Vector2Int key)
         {
-            if (chunksById.ContainsKey(key)) return;
-
-            GameObject go = new GameObject($"Chunk_({key.x},{key.y})");
-
-            float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, key);
-
-            Mesh mesh = TerrainMeshGenerator.CreateMeshTerrain(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, heights);
-
-            var meshFilter = go.AddComponent<MeshFilter>();
-            var meshRenderer = go.AddComponent<MeshRenderer>();
-            var MeshCollider = go.AddComponent<MeshCollider>();
-
-            meshFilter.mesh = mesh;
-            MeshCollider.sharedMesh = mesh;
-            meshRenderer.material = defaultMat;
-
-            var renderData = new ChunkRenderData
+            if(!chunkDataByID.TryGetValue(key, out ChunkData data))
             {
-                Mesh = mesh,
-                MeshFilter = meshFilter,
-                MeshRenderer = meshRenderer,
-                MeshCollider = MeshCollider
-            };
+                data = CreateChunkData(key);
+            }
 
-            var t = go.transform;
-            t.parent = transform;
-            t.position = CoordToWorld(key);
+            if(!MeshCache.TryGetMesh(key, out Mesh mesh))
+            {
+                mesh = CreateMeshData(data);
+                MeshCache.AddMesh(key, mesh);
+            }
+
+            CreateChunkView(data, mesh);
+
+            activeIds.Add(key);
+        }
+
+        private ChunkData CreateChunkData(Vector2Int key)
+        {
+            var worldPosition = CoordToWorld(key);
 
             var chunk = new ChunkData
             {
                 Coord = key,
-                GameObject = go,
-                RenderData = renderData,
+                WorldPosition = worldPosition,
                 CullData = new ChunkCullData
                 {
-                    Visible = true,
-                    Center = new Vector3(t.position.x + ChunkSettings.ChunkSizeInUnits * 0.5f + cullPadding, 50f, t.position.z + ChunkSettings.ChunkSizeInUnits * 0.5f + cullPadding),
+                    Visible = false,
+                    Center = new Vector3(worldPosition.x + ChunkSettings.ChunkSizeInUnits * 0.5f + cullPadding, 50f, worldPosition.z + ChunkSettings.ChunkSizeInUnits * 0.5f + cullPadding),
                     Radius = new Vector3(ChunkSettings.ChunkSizeInUnits * 0.5f, 50f, ChunkSettings.ChunkSizeInUnits * 0.5f).magnitude
                 }
             };
 
-            chunksById[key] = chunk;
-            activeIds.Add(key);
+            chunkDataByID[key] = chunk;
 
-            chunk.OnLoad();
+            return chunk;
+        }
+
+        private Mesh CreateMeshData(ChunkData data)
+        {
+            // eventually have a reuseable array and not allocate each time its needed - 1 array used over and over
+            float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, data.Coord);
+
+            return TerrainMeshGenerator.CreateMeshTerrain(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, heights);
+        }
+
+        private void CreateChunkView(ChunkData data, Mesh mesh)
+        {
+            var chunkView = ObjectPooler.Get<ChunkView>(chunkPrefab, data.WorldPosition, Quaternion.identity, transform);
+
+            chunkView.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
+
+            chunkView.Bind(data, mesh);
+
+            activeChunkViews[data.Coord] = chunkView;
         }
 
         private void RefreshWantedChunks()
@@ -95,15 +107,29 @@ namespace WorldGen.Terrain
 
             foreach (var id in removeIds)
             {
-                chunksById[id].OnUnload();
+                var view = activeChunkViews[id];
+
+                view.Unbind();
+
+                ObjectPooler.Release(view.gameObject);
+
+                activeChunkViews.Remove(id);
                 activeIds.Remove(id);
             }
 
             foreach (var id in wantedIds)
             {
-                if (chunksById.TryGetValue(id, out var chunk))
+                if (chunkDataByID.TryGetValue(id, out var chunkData))
                 {
-                    if (activeIds.Add(id)) chunk.OnLoad();
+                    if (activeIds.Add(id))
+                    {
+                        if(!MeshCache.TryGetMesh(id, out Mesh mesh))
+                        {
+                            mesh = CreateMeshData(chunkData);
+                        }
+
+                        CreateChunkView(chunkData, mesh);
+                    }
                 }
                 else if (queuedIds.Add(id))
                 {
@@ -121,7 +147,7 @@ namespace WorldGen.Terrain
                 if (activeIds.Contains(id)) continue;
 
                 BuildChunk(id);
-                UpdateChunkVisibilty(chunksById[id]);
+                UpdateChunkVisibilty(chunkDataByID[id]);
                 count++;
             }
         }

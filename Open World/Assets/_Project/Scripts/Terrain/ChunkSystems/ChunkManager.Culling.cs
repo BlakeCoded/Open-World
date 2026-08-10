@@ -10,80 +10,37 @@ namespace WorldGen.Terrain
         static readonly Vector4[] s_planesVecs = new Vector4[6];
         static readonly float[] s_planeRadius = new float[6];
 
-        
-
         Vector3 lastCameraPos = new Vector3(float.MinValue, float.MinValue, float.MinValue);
         Quaternion lastCameraRot;
 
-        //private void UpdateChunkVisibility()
-        //{
-        //    var t = cam.transform;
+        Vector3 camPos;
+        Vector3 camForward;
+        Quaternion camRotation;
 
-        //    var cameraChanged = t.position != lastCameraPos || t.rotation != lastCameraRot;
+        private void CacheCamera()
+        {
+            var t = cam.transform;
 
-        //    if (!cameraChanged) return;
-
-        //    visibleChunks.Clear();
-
-        //    CacheFrustumPlanes(cam, s_planes);
-        //    lastCameraPos = t.position;
-        //    lastCameraRot = t.rotation;
-
-        //    foreach(var id in activeIds)
-        //    {
-        //        if(!chunksById.TryGetValue(id, out var chunk)) continue;
-
-        //        int dx = Mathf.Abs(chunk.Coord.x - currentChunk.x);
-        //        int dz = Mathf.Abs(chunk.Coord.y - currentChunk.y);
-        //        int cd = Mathf.Max(dx, dz);
-
-        //        var toChunk = chunk.CullData.Bounds.center - t.position;
-
-        //        var distance = toChunk.magnitude;
-        //        var radius = chunk.CullData.Bounds.extents.magnitude; 
-
-        //        var dot = Vector3.Dot(t.forward, toChunk / distance);
-
-        //        var radiusOffset = radius / distance;
-
-        //        var behind = dot < -radiusOffset;
-
-        //        if (cd > chunkViewRadius || behind == true)
-        //        {
-        //            if(chunk.CullData.Visible)
-        //            {
-        //                chunk.SetMeshVisible(false);
-        //            }
-
-        //            continue;
-        //        }
-
-        //        var vis = GeometryUtility.TestPlanesAABB(s_planes, chunk.CullData.Bounds);
-
-        //        if(chunk.CullData.Visible != vis) chunk.SetMeshVisible(vis);
-
-        //        if (!vis) continue;
-
-        //        visibleChunks.Add(id);
-        //    }
-        //}
+            camPos = t.position;
+            camForward = t.forward;
+            camRotation = t.rotation;
+        }
 
         private void UpdateVisibility()
         {
-            var t = cam.transform;
-            var cameraChanged = t.position != lastCameraPos || t.rotation != lastCameraRot;
+            var cameraChanged = camPos != lastCameraPos || camRotation != lastCameraRot;
 
-            if (!cameraChanged) return;
-
-            CacheFrustumPlanes(cam);
-            lastCameraPos = t.position;
-            lastCameraRot = t.rotation;
+            if(!cameraChanged) return;
 
             visibleChunks.Clear();
 
-            foreach (var id in activeIds)
+            CacheFrustumPlanes(cam);
+            lastCameraPos = camPos;
+            lastCameraRot = camRotation;
+
+            foreach(var id in activeIds)
             {
-                if (chunksById.TryGetValue(id, out var chunk))
+                if(chunkDataByID.TryGetValue(id, out var chunk))
                 {
                     UpdateChunkVisibilty(chunk);
                 }
@@ -92,19 +49,19 @@ namespace WorldGen.Terrain
 
         private void UpdateChunkVisibilty(ChunkData chunk)
         {
-            var t = cam.transform;
-
-            var toChunk = chunk.CullData.Center - t.position;
+            var toChunk = chunk.CullData.Center - camPos;
             var radius = chunk.CullData.Radius;
 
-            var dot = Vector3.Dot(t.forward, toChunk);
-            var behind = dot < -radius;
+            var dot = Vector3.Dot(camForward, toChunk);
 
-            if (behind)
+            // a simpler dot product test
+            // if behind camera, offset by a chunks radius
+            // turn off mesh renderer
+            if(dot <= -radius) 
             {
-                if (chunk.CullData.Visible)
+                if(chunk.CullData.Visible)
                 {
-                    chunk.SetMeshVisible(false);
+                    SetChunkVisible(chunk, false);
                 }
 
                 return;
@@ -112,26 +69,24 @@ namespace WorldGen.Terrain
 
             var vis = TestChunk(chunk.CullData.Center);
 
-            if (chunk.CullData.Visible != vis)
+            if(chunk.CullData.Visible != vis)
             {
-                chunk.SetMeshVisible(vis);
+                SetChunkVisible(chunk, vis);
             }
 
-            if (chunk.CullData.Visible)
+            if(chunk.CullData.Visible)
             {
                 visibleChunks.Add(chunk.Coord);
             }
         }
 
-        private void CacheFrustumPlanes(Camera cam, Plane[] planesOut)
+        private void SetChunkVisible(ChunkData chunk, bool visible)
         {
-            GeometryUtility.CalculateFrustumPlanes(cam, planesOut);
+            if(chunk.CullData.Visible == visible) return;
 
-            for(int i = 0; i < 6; i++)
-            {
-                var n = planesOut[i].normal;
-                s_planesVecs[i] = new Vector4(n.x, n.y, n.z, planesOut[i].distance);
-            }
+            chunk.CullData.Visible = visible;
+
+            activeChunkViews[chunk.Coord].SetVisible(visible);
         }
 
         static readonly Vector3 ChunkExtents = new Vector3(ChunkSettings.ChunkSizeInUnits * 0.5f,
@@ -144,18 +99,24 @@ namespace WorldGen.Terrain
 
         private void CacheFrustumPlanes(Camera cam)
         {
+            // Build the camera's 6 frustum planes
             GeometryUtility.CalculateFrustumPlanes(cam, s_planes);
 
-            for (int i = 0; i < 6; i++)
+            for(int i = 0; i < 6; i++)
             {
                 Vector3 n = s_planes[i].normal;
 
+                // Cache the plane as a Vector4 (normal.xyz + distance)
+                // so TestChunk() can use simple math without accessing Plane.
                 s_planesVecs[i] = new Vector4(
                     n.x,
                     n.y,
                     n.z,
                     s_planes[i].distance);
 
+                // Precompute how far a chunk's AABB extends along this plane.
+                // This value is the same for every chunk because all chunks
+                // have the same size.
                 s_planeRadius[i] =
                     Mathf.Abs(n.x) * ex +
                     Mathf.Abs(n.y) * ey +
@@ -165,16 +126,19 @@ namespace WorldGen.Terrain
 
         private bool TestChunk(Vector3 center)
         {
-            for (int i = 0; i < 6; i++)
+            for(int i = 0; i < 6; i++)
             {
                 Vector4 p = s_planesVecs[i];
 
+                // Signed distance from the chunk center to the plane.
                 float distance =
                     p.x * center.x +
                     p.y * center.y +
                     p.z * center.z +
                     p.w;
 
+                // If the chunk's bounding box is completely behind
+                // any plane, it cannot be visible.
                 if (distance + s_planeRadius[i] < 0f)
                     return false;
             }

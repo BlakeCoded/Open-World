@@ -29,7 +29,7 @@ namespace WorldGen.Terrain
 
         public static float SampleHeight(float worldX, float worldZ)
         {
-            float noiseScale = 0.02f;
+            float noiseScale = 0.035f;
             float heightMultiplier = 20f;
 
             return Mathf.PerlinNoise((worldX + NoiseOffset) * noiseScale, (worldZ + NoiseOffset) * noiseScale) * heightMultiplier;
