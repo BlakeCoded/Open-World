@@ -1,6 +1,7 @@
-using UnityEngine;
 using System.Collections.Generic;
 using Project.Singleton;
+using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace WorldGen.Terrain
 {
@@ -19,10 +20,18 @@ namespace WorldGen.Terrain
 
         [SerializeField] private GameObject Player;
 
+        private ObjectPool<ChunkView> chunkViewPool;
+
         private void Awake()
         {
             cam = Camera.main;
             InitalizeSeeds();
+
+            chunkViewPool = new ObjectPool<ChunkView>(
+                create: OnChunkViewCreate,
+                maxPoolSize: 1000,
+                reset: OnChunkViewReset,
+                dispose: OnChunkViewDestroy);
         }
 
         private void Update() 
@@ -37,6 +46,17 @@ namespace WorldGen.Terrain
         private void LateUpdate()
         {
             UpdateVisibility();
+
+            //long allocated = Profiler.GetTotalAllocatedMemoryLong();
+            //long reserved = Profiler.GetTotalReservedMemoryLong();
+            //long mono = Profiler.GetMonoUsedSizeLong();
+
+            //Debug.Log(
+            //    $"Memory | " +
+            //    $"Allocated: {allocated / 1048576f:F1} MB | " +
+            //    $"Reserved: {reserved / 1048576f:F1} MB | " +
+            //    $"Managed: {mono / 1048576f:F1} MB"
+            //);
         }
 
         private void InitalizeSeeds()
@@ -69,6 +89,22 @@ namespace WorldGen.Terrain
 
             activeIds.Clear();
             visibleChunks.Clear();
+        }
+
+        private ChunkView OnChunkViewCreate()
+        {
+            return Instantiate(chunkPrefab).GetComponent<ChunkView>();
+        }
+
+        private void OnChunkViewReset(ChunkView view)
+        {
+            view.Unbind();
+            view.gameObject.SetActive(false);
+        }
+
+        private void OnChunkViewDestroy(ChunkView view)
+        {
+            Destroy(view.gameObject);
         }
     }
 }

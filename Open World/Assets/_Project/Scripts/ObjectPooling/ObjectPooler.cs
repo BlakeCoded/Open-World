@@ -21,7 +21,7 @@ public class ObjectPooler : MonoBehaviourSingleton<ObjectPooler>
 
     private void Awake()
     {
-        OnInternalBootstrap();
+        //OnInternalBootstrap();
     }
 
     protected override void OnInternalBootstrap()
@@ -63,24 +63,24 @@ public class ObjectPooler : MonoBehaviourSingleton<ObjectPooler>
 
             foreach(GameObject obj in temp)
             {
-                objectPools[prefab].Release(obj);
+                //objectPools[prefab].Release(obj);
             }
         }
     }
 
     private void CreatePool(GameObject prefab)
     {
-        ObjectPool<GameObject> pool = new ObjectPool<GameObject>(
-            createFunc: () => CreateObject(prefab),
-            actionOnGet: OnGetObject,
-            actionOnRelease: OnReleaseObject,
-            actionOnDestroy: OnDestroyObject,
-            collectionCheck: true, // Editor safety checks. Disable in release builds for performance.
-            defaultCapacity: MIN_POOL_CAPACITY,
-            maxSize: MAX_POOL_CAPACITY
-            );
+        //ObjectPool<GameObject> pool = new ObjectPool<GameObject>(
+        //    createFunc: () => CreateObject(prefab),
+        //    actionOnGet: OnGetObject,
+        //    actionOnRelease: OnReleaseObject,
+        //    actionOnDestroy: OnDestroyObject,
+        //    collectionCheck: true, // Editor safety checks. Disable in release builds for performance.
+        //    defaultCapacity: MIN_POOL_CAPACITY,
+        //    maxSize: MAX_POOL_CAPACITY
+        //    );
 
-        objectPools[prefab] = pool;
+        //objectPools[prefab] = pool;
     }
 
     private GameObject CreateObject(GameObject prefab)
@@ -213,7 +213,7 @@ public class ObjectPooler : MonoBehaviourSingleton<ObjectPooler>
             obj.transform.SetParent(poolHolder.transform);
             obj.SetActive(false);
 
-            objectPools[prefab].Release(obj);
+            //objectPools[prefab].Release(obj);
         }
         else
         {

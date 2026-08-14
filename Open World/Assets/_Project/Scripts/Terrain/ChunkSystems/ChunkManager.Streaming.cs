@@ -28,20 +28,47 @@ namespace WorldGen.Terrain
 
         private void BuildChunk(Vector2Int key)
         {
-            if(!chunkDataByID.TryGetValue(key, out ChunkData data))
+            if (!chunkDataByID.TryGetValue(key, out ChunkData data))
             {
                 data = CreateChunkData(key);
             }
 
-            if(!MeshCache.TryGetMesh(key, out Mesh mesh))
+            if(!activeChunkViews.TryGetValue(key, out ChunkView view))
             {
-                mesh = CreateMeshData(data);
-                MeshCache.AddMesh(key, mesh);
+                view = CreateChunkView(data);
             }
 
-            CreateChunkView(data, mesh);
-
             activeIds.Add(key);
+        }
+
+        private ChunkView CreateChunkView(ChunkData data)
+        {
+            ChunkView view = chunkViewPool.Get();
+
+            TerrainHeightGenerator.FillHeights(view.Heights, data.Coord);
+
+            TerrainMeshGenerator.FillVerticies(view.Vertices, view.Heights);
+
+            TerrainMeshGenerator.FillNormals(view.Heights, view.Normals);
+
+            view.Mesh.SetVertices(view.Vertices);
+            view.Mesh.SetNormals(view.Normals);
+            view.Mesh.RecalculateBounds();
+
+            view.Bind(data);
+
+            var t = view.gameObject.transform;
+            var go = view.gameObject;
+
+            t.position = data.WorldPosition;
+            t.SetParent(transform);
+
+            go.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
+            go.SetActive(true);
+
+            activeChunkViews[data.Coord] = view;
+
+            return view;
         }
 
         private ChunkData CreateChunkData(Vector2Int key)
@@ -63,25 +90,6 @@ namespace WorldGen.Terrain
             chunkDataByID[key] = chunk;
 
             return chunk;
-        }
-
-        private Mesh CreateMeshData(ChunkData data)
-        {
-            // eventually have a reuseable array and not allocate each time its needed - 1 array used over and over
-            float[] heights = TerrainHeightGenerator.CreateHeights(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, data.Coord);
-
-            return TerrainMeshGenerator.CreateMeshTerrain(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies, heights);
-        }
-
-        private void CreateChunkView(ChunkData data, Mesh mesh)
-        {
-            var chunkView = ObjectPooler.Get<ChunkView>(chunkPrefab, data.WorldPosition, Quaternion.identity, transform);
-
-            chunkView.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
-
-            chunkView.Bind(data, mesh);
-
-            activeChunkViews[data.Coord] = chunkView;
         }
 
         private void RefreshWantedChunks()
@@ -111,7 +119,7 @@ namespace WorldGen.Terrain
 
                 view.Unbind();
 
-                ObjectPooler.Release(view.gameObject);
+                chunkViewPool.Return(view);
 
                 activeChunkViews.Remove(id);
                 activeIds.Remove(id);
@@ -123,12 +131,7 @@ namespace WorldGen.Terrain
                 {
                     if (activeIds.Add(id))
                     {
-                        if(!MeshCache.TryGetMesh(id, out Mesh mesh))
-                        {
-                            mesh = CreateMeshData(chunkData);
-                        }
-
-                        CreateChunkView(chunkData, mesh);
+                        CreateChunkView(chunkData);
                     }
                 }
                 else if (queuedIds.Add(id))

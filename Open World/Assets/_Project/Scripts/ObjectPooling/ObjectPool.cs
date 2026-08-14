@@ -1,0 +1,77 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ObjectPool<T> where T : class
+{
+    private readonly List<PoolItem<T>> items = new();
+    private readonly Func<T> create;
+    private readonly Action<T> reset;
+    private readonly Action<T> dispose;
+    private readonly int MAX_POOL_SIZE;
+
+    public ObjectPool(Func<T> create, int maxPoolSize, Action<T> reset = null, Action<T> dispose = null)
+    {
+        this.create = create;
+        this.reset = reset;
+        this.dispose = dispose;
+
+        this.MAX_POOL_SIZE = maxPoolSize;
+    }
+
+    public T Get()
+    {
+        foreach(var item in items)
+        {
+            if(!item.InUse)
+            {
+                item.InUse = true;
+                return item.Item;
+            }
+        }
+
+        var newItem = new PoolItem<T>
+        {
+            Item = create(),
+            InUse = true
+        };
+
+        items.Add(newItem);
+        return newItem.Item;
+    }
+
+    public void Return(T obj)
+    {
+        foreach(var item in items)
+        {
+            if (ReferenceEquals(item.Item, obj))
+            {
+                item.InUse = false;
+                reset?.Invoke(obj);
+                return;
+            }
+        }
+    }
+
+    public void Cleanup()
+    {
+        if (items.Count <= MAX_POOL_SIZE) return;
+
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            if (items.Count <= MAX_POOL_SIZE) break;
+
+            var item = items[i];
+
+            if (item.InUse)
+                continue;
+
+            Debug.Log("Destroying Pooled Chunk View");
+
+            dispose?.Invoke(item.Item);
+            items.RemoveAt(i);
+        }
+    }
+
+    public int Count() => items.Count;
+}
