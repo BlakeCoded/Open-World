@@ -126,4 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 29dca3077be5775439c4a05c41c2e57f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Chunk
-  terrainMaterial: {fileID: 2100000, guid: cc6fa2c3701fce14a816cf4bbb685692, type: 2}
+  Heights: []
+  Vertices: []
+  Normals: []
+  terrainMaterial: {fileID: 2100000, guid: 0070300bb2ad4974f89a170f3e2273da, type: 2}

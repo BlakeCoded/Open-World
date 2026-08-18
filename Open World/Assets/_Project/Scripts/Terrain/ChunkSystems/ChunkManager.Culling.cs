@@ -56,7 +56,7 @@ namespace WorldGen.Terrain
 
             // a simpler dot product test
             // if behind camera, offset by a chunks radius
-            // turn off mesh renderer
+            // dont render chunk and props (trees, rocks etc)
             if(dot <= -radius) 
             {
                 if(chunk.CullData.Visible)

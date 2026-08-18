@@ -1,9 +1,6 @@
 using UnityEngine;
 using WorldGen.Terrain;
 
-[RequireComponent(typeof(MeshRenderer))]
-[RequireComponent(typeof(MeshFilter))]
-[RequireComponent(typeof(MeshCollider))]
 public class ChunkView : MonoBehaviour
 {
     public ChunkData Data { get; private set; }
@@ -25,10 +22,10 @@ public class ChunkView : MonoBehaviour
 
         MeshFilter.sharedMesh = Mesh;
 
-        terrainMaterial = new Material(terrainMaterial)
-        {
-            color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
-        };
+        //terrainMaterial = new Material(terrainMaterial)
+        //{
+        //    color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
+        //};
 
         MeshRenderer.sharedMaterial = terrainMaterial;
 
@@ -43,8 +40,7 @@ public class ChunkView : MonoBehaviour
     {
         Data = data;
 
-        MeshCollider.sharedMesh = Mesh;
-        MeshRenderer.enabled = data.CullData.Visible; // Enable this line of code for better editor performance
+        //MeshRenderer.enabled = data.CullData.Visible; // Enable this line of code for better editor performance
     }
 
     public void Unbind()
@@ -54,8 +50,13 @@ public class ChunkView : MonoBehaviour
         Data = null;
     }
 
+    public void BakeMeshCollider()
+    {
+        MeshCollider.sharedMesh = Mesh;
+    }
+
     public void SetVisible(bool visible)
     {
-        MeshRenderer.enabled = visible; // Enable this line of code for better editor performance
+        //MeshRenderer.enabled = visible; // Enable this line of code for better editor performance
     }
 }

@@ -1,6 +1,7 @@
 using Project.Singleton;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Profiling;
 
 namespace WorldGen.Terrain
 {
@@ -9,8 +10,10 @@ namespace WorldGen.Terrain
     {
         [Header("Streaming")]
         [SerializeField] int chunkViewRadius = 2;
+        [SerializeField] int ColliderBuildRadius = 3;
         [SerializeField] float updateInterval = 0.25f;
-        [SerializeField] int batchAmount = 5;
+        [SerializeField] int batchAmountChunks = 1;
+        [SerializeField] int batchAmountColliders = 1;
         [SerializeField] float cullPadding = 2f;
 
         [SerializeField] GameObject chunkPrefab;
@@ -35,38 +38,95 @@ namespace WorldGen.Terrain
 
             if(!activeChunkViews.TryGetValue(key, out ChunkView view))
             {
-                view = CreateChunkView(data);
+                view = CreateChunkView(data, Noise);
             }
 
             activeIds.Add(key);
         }
 
-        private ChunkView CreateChunkView(ChunkData data)
+        private ChunkView CreateChunkView(ChunkData data, NoiseProfile noise)
         {
             ChunkView view = chunkViewPool.Get();
 
-            TerrainHeightGenerator.FillHeights(view.Heights, data.Coord);
+            var go = view.gameObject;
+            go.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
+            go.SetActive(true);
 
-            TerrainMeshGenerator.FillVerticies(view.Vertices, view.Heights);
+            var t = view.gameObject.transform;
+            t.position = data.WorldPosition;
+            t.SetParent(transform);
 
-            TerrainMeshGenerator.FillNormals(view.Heights, view.Normals);
+            int dx = Mathf.Abs(data.Coord.x - currentChunk.x);
+            int dz = Mathf.Abs(data.Coord.y - currentChunk.y);
+            int cd = Mathf.Max(dx, dz);
+
+            int lod = GetChunkViewLOD(cd);
+
+            TerrainHeightGenerator.FillHeights(view.Heights, data.Coord, noise, 1);
+            TerrainMeshGenerator.FillVerticies(view.Vertices, view.Heights, 1);
+            TerrainMeshGenerator.FillNormals(view.Normals, view.Heights, 1);
 
             view.Mesh.SetVertices(view.Vertices);
             view.Mesh.SetNormals(view.Normals);
             view.Mesh.RecalculateBounds();
 
+            if(lod == ChunkSettings.ColliderLevelOfDetail && cd <= ColliderBuildRadius)
+            {
+                if (collidersToBuild.Add(data.Coord))
+                {
+                    colliderBuildQueue.Enqueue(data.Coord);
+                }
+            }
+
+            //view.MeshCollider.sharedMesh = null;
+
             view.Bind(data);
+            
+            activeChunkViews[data.Coord] = view;
 
-            var t = view.gameObject.transform;
+            return view;
+        }
+
+        private ChunkViewLODS CreateChunkViewLOD(ChunkData data, NoiseProfile noise)
+        {
+            ChunkViewLODS view = new ChunkViewLODS(); // imagine this is pooled.
+
             var go = view.gameObject;
-
-            t.position = data.WorldPosition;
-            t.SetParent(transform);
-
             go.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
             go.SetActive(true);
 
-            activeChunkViews[data.Coord] = view;
+            var t = view.gameObject.transform;
+            t.position = data.WorldPosition;
+            t.SetParent(transform);
+
+            int dx = Mathf.Abs(data.Coord.x - currentChunk.x);
+            int dz = Mathf.Abs(data.Coord.y - currentChunk.y);
+            int cd = Mathf.Max(dx, dz);
+
+            view.CurrentLOD = GetChunkViewLOD(cd);
+            var lodMeshData = view.GetLODMeshData(view.CurrentLOD);
+
+            // generate heights
+            TerrainHeightGenerator.FillHeights(lodMeshData.Heights, data.Coord, noise, lodMeshData.Stride);
+            TerrainMeshGenerator.FillVerticies(lodMeshData.Vertices, lodMeshData.Heights, lodMeshData.Stride);
+            TerrainMeshGenerator.FillNormals(lodMeshData.Normals, lodMeshData.Heights, lodMeshData.Stride);
+
+            lodMeshData.Mesh.SetVertices(lodMeshData.Vertices);
+            lodMeshData.Mesh.SetNormals(lodMeshData.Normals);
+            lodMeshData.Mesh.RecalculateBounds();
+
+
+            if (view.CurrentLOD == ChunkSettings.ColliderLevelOfDetail && cd <= ColliderBuildRadius)
+            {
+                if(collidersToBuild.Add(data.Coord))
+                {
+                    colliderBuildQueue.Enqueue(data.Coord);
+                }
+            }
+
+            view.Bind(data);
+
+            //activeChunkViews[data.Coord] = view; add view to active chunks
 
             return view;
         }
@@ -109,15 +169,46 @@ namespace WorldGen.Terrain
                     if (cd <= chunkViewRadius) wantedIds.Add(id);
                 }
 
+            int keepChunkRadius = chunkViewRadius + 4;
+
             foreach (var id in activeIds)
-                if (!wantedIds.Contains(id))
+            {
+                int dx = Mathf.Abs(id.x - currentChunk.x);
+                int dz = Mathf.Abs(id.y - currentChunk.y);
+
+                int cd = Mathf.Max(dx, dz);
+
+                var view = activeChunkViews[id];
+
+                if(cd <= ColliderBuildRadius)
+                {
+                    if (collidersToBuild.Add(id))
+                    {
+                        colliderBuildQueue.Enqueue(id);
+                    }
+                }
+
+                if (cd <= chunkViewRadius)
+                {
+                    view.gameObject.SetActive(true);
+                    continue;
+                }
+                else if (cd <= keepChunkRadius)
+                {
+                    view.gameObject.SetActive(false);
+                    continue;
+                }
+
+                if (cd > keepChunkRadius)
+                {
                     removeIds.Add(id);
+                }
+            }
+                
 
             foreach (var id in removeIds)
             {
                 var view = activeChunkViews[id];
-
-                view.Unbind();
 
                 chunkViewPool.Return(view);
 
@@ -129,12 +220,15 @@ namespace WorldGen.Terrain
             {
                 if (chunkDataByID.TryGetValue(id, out var chunkData))
                 {
-                    if (activeIds.Add(id))
+                    if(activeIds.Add(id))
                     {
-                        CreateChunkView(chunkData);
+                        CreateChunkView(chunkData, Noise);
+                        continue;
                     }
+
+                    activeChunkViews[id].gameObject.SetActive(true);
                 }
-                else if (queuedIds.Add(id))
+                else if(queuedIds.Add(id))
                 {
                     buildQueue.Enqueue(id);
                 }
@@ -144,13 +238,50 @@ namespace WorldGen.Terrain
         private void BuildQueuedChunks(int batch)
         {
             int count = 0;
+
+            float startTime = Time.realtimeSinceStartup;
+
             while (count < batch && buildQueue.Count > 0)
             {
+                if (Time.realtimeSinceStartup - startTime > 0.01f)
+                {
+                    //Debug.Log(count);
+                    break;
+                }
+
                 var id = buildQueue.Dequeue();
                 if (activeIds.Contains(id)) continue;
 
+                var cd = id - currentChunk;
+                if (Mathf.Max(Mathf.Abs(cd.x), Mathf.Abs(cd.y)) > chunkViewRadius) continue;
+
+                //Profiler.BeginSample("Build Chunk");
                 BuildChunk(id);
+                //Profiler.EndSample();
                 UpdateChunkVisibilty(chunkDataByID[id]);
+                count++;
+            }
+        }
+
+        private void BuildQueuedColliders(int batch)
+        {
+            int count = 0;
+
+            while(count < batch && colliderBuildQueue.Count > 0)
+            {
+                var id = colliderBuildQueue.Dequeue();
+                collidersToBuild.Remove(id);
+
+                var view = activeChunkViews[id];
+
+                var cd = view.Data.Coord - currentChunk;
+
+                if (Mathf.Max(Mathf.Abs(cd.x), Mathf.Abs(cd.y)) > ColliderBuildRadius) continue;
+
+                if (view.MeshCollider.sharedMesh != null) continue;
+
+                view.BakeMeshCollider();
+
                 count++;
             }
         }

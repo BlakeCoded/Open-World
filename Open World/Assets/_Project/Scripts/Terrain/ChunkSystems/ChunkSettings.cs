@@ -6,5 +6,7 @@ namespace WorldGen.Terrain
     {
         public const int ChunkSizeInUnits = 50;
         public const int ChunkVerticies = 128;
+        public const int MeshLevelsOfDetail = 3;
+        public const int ColliderLevelOfDetail = 0;
     }
 }

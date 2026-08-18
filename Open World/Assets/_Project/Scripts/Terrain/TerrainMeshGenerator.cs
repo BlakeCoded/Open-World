@@ -1,3 +1,4 @@
+using System.Drawing;
 using UnityEngine;
 
 namespace WorldGen.Terrain
@@ -148,8 +149,39 @@ namespace WorldGen.Terrain
 
             return mesh;
         }
+        public static Mesh CreateBaseMesh(Vector3[] vertices, Vector3[] normals, int verts)
+        {
+            var mesh = new Mesh();
 
-        public static void FillVerticies(Vector3[] vertices, float[] heights)
+            FillVerticiesBase(vertices, verts);
+            var triangles = CreateTriangles(verts);
+            var uvs = CreateUVs(verts);
+
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.SetUVs(0, uvs);
+
+            return mesh;
+        }
+
+        public static Vector3[] FillVerticiesBase(Vector3[] vertices, int verts)
+        {
+            float size = ChunkSettings.ChunkSizeInUnits;
+
+            float step = size / (verts - 1);
+
+            int index = 0;
+
+            for (int z = 0; z < verts; z++)
+                for (int x = 0; x < verts; x++)
+                {
+                    vertices[index++] = new Vector3(x * step, 0f, z * step);
+                }
+
+            return vertices;
+        }
+
+        public static void FillVerticies(Vector3[] vertices, float[] heights, int stride)
         {
             int verts = ChunkSettings.ChunkVerticies;
 
@@ -168,7 +200,7 @@ namespace WorldGen.Terrain
                 }
         }
 
-        public static void FillNormals(float[] heights, Vector3[] normals)
+        public static void FillNormals(Vector3[] normals, float[] heights, int stride)
         {
             int verts = ChunkSettings.ChunkVerticies;
             int borderedVerts = verts + 2;

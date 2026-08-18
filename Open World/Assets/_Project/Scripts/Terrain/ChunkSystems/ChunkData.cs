@@ -9,6 +9,7 @@ namespace WorldGen.Terrain
         public ChunkCullData CullData;
 
         // Unused
+        public int CurrentLOD = -1;
         public bool Modified;
     }
 }

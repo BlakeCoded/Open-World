@@ -1,56 +1,71 @@
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace WorldGen.Terrain
 {
     public static class TerrainHeightGenerator
     {
-        public static float[] CreateHeights(float size, int verts, Vector2Int chunkCoord)
+        public static float[] CreateHeights(Vector2Int chunkCoord, int stride, NoiseProfile noise)
         {
+            float size = ChunkSettings.ChunkSizeInUnits;
+            int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
             int borderedVerts = verts + 2;
 
             float[] heights = new float[borderedVerts * borderedVerts];
 
-            int index = 0;
-            float step = size / (verts - 1);
+            float fullStep = size / (ChunkSettings.ChunkVerticies - 1);
+            float step = fullStep * stride;
 
-            for(int z = -1; z <= verts; z++)
-                for(int x = -1; x <= verts; x++)
+            int index = 0;
+
+            for (int z = -1; z <= verts; z++)
+            {
+                float worldZ = chunkCoord.y * size + z * step;
+                for (int x = -1; x <= verts; x++)
                 {
                     float worldX = chunkCoord.x * size + x * step;
-                    float worldZ = chunkCoord.y * size + z * step;
 
-                    heights[index++] = SampleHeight(worldX, worldZ);
+                    heights[index++] = SampleHeight(worldX, worldZ, noise);
                 }
+            }
 
             return heights;
         }
 
-        public static void FillHeights(float[] heights, Vector2Int chunkCoord)
+        public static void FillHeights(float[] heights, Vector2Int chunkCoord, NoiseProfile noise, int stride)
         {
-            int verts = ChunkSettings.ChunkVerticies;
             float size = ChunkSettings.ChunkSizeInUnits;
+            int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
+
+            float fullStep = size / (ChunkSettings.ChunkVerticies - 1);
+            float step = fullStep * stride;
 
             int index = 0;
-            float step = size / (verts - 1);
 
             for (int z = -1; z <= verts; z++)
+            {
+                float worldZ = chunkCoord.y * size + z * step;
                 for (int x = -1; x <= verts; x++)
                 {
                     float worldX = chunkCoord.x * size + x * step;
-                    float worldZ = chunkCoord.y * size + z * step;
 
-                    heights[index++] = SampleHeight(worldX, worldZ);
+                    heights[index++] = SampleHeight(worldX, worldZ, noise);
                 }
+            }
         }
 
-        const float NoiseOffset = 10000f;
-
-        public static float SampleHeight(float worldX, float worldZ)
+        public static float SampleHeight(float worldX, float worldZ, NoiseProfile noise)
         {
-            float noiseScale = 0.01f;
-            float heightMultiplier = 20f;
+            //Profiler.BeginSample("Fractal Noise");
 
-            return Mathf.PerlinNoise((worldX + NoiseOffset) * noiseScale, (worldZ + NoiseOffset) * noiseScale) * heightMultiplier;
+            float noiseX = worldX * noise.Scale;
+            float noiseZ = worldZ * noise.Scale;
+
+            float height = Noise.FractalNoise(noiseX, noiseZ, noise.Octaves, noise.lacunarity, noise.Persistence) * noise.HeightMultiplier;
+
+            //Profiler.EndSample();
+
+            return height;
         }
     }
 }

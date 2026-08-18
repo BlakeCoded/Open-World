@@ -15,10 +15,13 @@ namespace WorldGen.Terrain
         readonly HashSet<Vector2Int> wantedIds = new();
         readonly HashSet<Vector2Int> removeIds = new();
         readonly HashSet<Vector2Int> queuedIds = new();
+        readonly HashSet<Vector2Int> collidersToBuild = new();
         readonly HashSet<Vector2Int> visibleChunks = new();
         readonly Queue<Vector2Int> buildQueue = new();
+        readonly Queue<Vector2Int> colliderBuildQueue = new();
 
         [SerializeField] private GameObject Player;
+        [SerializeField] private NoiseProfile Noise;
 
         private ObjectPool<ChunkView> chunkViewPool;
 
@@ -29,9 +32,11 @@ namespace WorldGen.Terrain
 
             chunkViewPool = new ObjectPool<ChunkView>(
                 create: OnChunkViewCreate,
-                maxPoolSize: 1000,
+                maxPoolSize: 850,
                 reset: OnChunkViewReset,
                 dispose: OnChunkViewDestroy);
+
+            chunkViewPool.PreWarm((chunkViewRadius * 2) + 1);
         }
 
         private void Update() 
@@ -40,29 +45,32 @@ namespace WorldGen.Terrain
 
             UpdateCameraChunk();
             RefreshWantedChunks();
-            BuildQueuedChunks(batchAmount);
+            BuildQueuedChunks(batchAmountChunks);
+            BuildQueuedColliders(batchAmountColliders);
         }
 
         private void LateUpdate()
         {
             UpdateVisibility();
 
-            //long allocated = Profiler.GetTotalAllocatedMemoryLong();
-            //long reserved = Profiler.GetTotalReservedMemoryLong();
-            //long mono = Profiler.GetMonoUsedSizeLong();
-
-            //Debug.Log(
-            //    $"Memory | " +
-            //    $"Allocated: {allocated / 1048576f:F1} MB | " +
-            //    $"Reserved: {reserved / 1048576f:F1} MB | " +
-            //    $"Managed: {mono / 1048576f:F1} MB"
-            //);
+            CleanUpViewPool();
         }
 
         private void InitalizeSeeds()
         {
             int seed = Random.Range(int.MinValue, int.MaxValue);
             Random.InitState(seed);
+        }
+
+        private float cleanUpTimer;
+        private void CleanUpViewPool()
+        {
+            cleanUpTimer -= Time.deltaTime;
+            if(cleanUpTimer < 0f)
+            {
+                chunkViewPool.Cleanup();
+                cleanUpTimer = 10f;
+            }
         }
 
         private Vector2Int WorldToCoord(Vector3 position)

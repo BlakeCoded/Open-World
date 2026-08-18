@@ -53,6 +53,21 @@ public class ObjectPool<T> where T : class
         }
     }
 
+    public void PreWarm(int count)
+    {
+        T[] preWarm = new T[count];
+
+        for(int  i = 0; i < count; i++)
+        {
+           preWarm[i] = Get();
+        }
+
+        foreach(var item in preWarm)
+        {
+            Return(item);
+        }
+    }
+
     public void Cleanup()
     {
         if (items.Count <= MAX_POOL_SIZE) return;
