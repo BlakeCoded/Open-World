@@ -32,10 +32,10 @@ namespace WorldGen.Terrain
             return heights;
         }
 
-        public static void FillHeights(float[] heights, Vector2Int chunkCoord, NoiseProfile noise, int stride)
+        public static void FillHeights(float[] heights, int verts, int stride, Vector2Int chunkCoord, NoiseProfile noise)
         {
             float size = ChunkSettings.ChunkSizeInUnits;
-            int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
+            //int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
 
             float fullStep = size / (ChunkSettings.ChunkVerticies - 1);
             float step = fullStep * stride;
@@ -58,8 +58,8 @@ namespace WorldGen.Terrain
         {
             //Profiler.BeginSample("Fractal Noise");
 
-            float noiseX = worldX * noise.Scale;
-            float noiseZ = worldZ * noise.Scale;
+            float noiseX = worldX * noise.Scale + ChunkManager.Instance.SeedOffsetX;
+            float noiseZ = worldZ * noise.Scale + ChunkManager.Instance.SeedOffsetZ;
 
             float height = Noise.FractalNoise(noiseX, noiseZ, noise.Octaves, noise.lacunarity, noise.Persistence) * noise.HeightMultiplier;
 

@@ -8,4 +8,5 @@ public class LODMeshData
     public float[] Heights;
     public int Stride;
     public int Verts;
+    public Vector2Int GeneratedFor = new Vector2Int(int.MinValue, int.MaxValue);
 }

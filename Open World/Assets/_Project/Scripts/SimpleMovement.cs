@@ -33,13 +33,13 @@ public class SimpleMovement : MonoBehaviour
         // Move
         if (keyboard.wKey.isPressed)
         {
-            //transform.position += transform.forward * moveSpeed * Time.deltaTime;
-            rb.AddForce(transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
+            transform.position += transform.forward * moveSpeed * Time.deltaTime;
+            //rb.AddForce(transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
         }
         else if (keyboard.sKey.isPressed)
         {
-            //transform.position -= transform.forward * moveSpeed * Time.deltaTime;
-            rb.AddForce(-transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
+            transform.position -= transform.forward * moveSpeed * Time.deltaTime;
+            //rb.AddForce(-transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
         }
     }
 }

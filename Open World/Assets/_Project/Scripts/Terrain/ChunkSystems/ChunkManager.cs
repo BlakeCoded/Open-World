@@ -20,23 +20,21 @@ namespace WorldGen.Terrain
         readonly Queue<Vector2Int> buildQueue = new();
         readonly Queue<Vector2Int> colliderBuildQueue = new();
 
-        [SerializeField] private GameObject Player;
+        public int WorldSeed { get; private set; }
+        public float SeedOffsetX;
+        public float SeedOffsetZ;
+        [SerializeField] GameObject chunkPrefab;
         [SerializeField] private NoiseProfile Noise;
 
         private ObjectPool<ChunkView> chunkViewPool;
 
         private void Awake()
         {
-            cam = Camera.main;
             InitalizeSeeds();
 
-            chunkViewPool = new ObjectPool<ChunkView>(
-                create: OnChunkViewCreate,
-                maxPoolSize: 850,
-                reset: OnChunkViewReset,
-                dispose: OnChunkViewDestroy);
+            CreatePools();
 
-            chunkViewPool.PreWarm((chunkViewRadius * 2) + 1);
+            cam = Camera.main;
         }
 
         private void Update() 
@@ -58,8 +56,23 @@ namespace WorldGen.Terrain
 
         private void InitalizeSeeds()
         {
-            int seed = Random.Range(int.MinValue, int.MaxValue);
-            Random.InitState(seed);
+            WorldSeed = Random.Range(int.MinValue, int.MaxValue);
+
+            System.Random rand = new System.Random(WorldSeed);
+
+            SeedOffsetX = (float)rand.NextDouble() * 100f;
+            SeedOffsetZ = (float)rand.NextDouble() * 100f;
+        }
+
+        private void CreatePools()
+        {
+            chunkViewPool = new ObjectPool<ChunkView>(
+                create: OnCreateChunkView,
+                maxPoolSize: 1000,
+                reset: OnReturnChunkView,
+                dispose: OnDestroyChunkView);
+
+            chunkViewPool.PreWarm((chunkViewRadius * 2) + 1);
         }
 
         private float cleanUpTimer;
@@ -99,18 +112,18 @@ namespace WorldGen.Terrain
             visibleChunks.Clear();
         }
 
-        private ChunkView OnChunkViewCreate()
+        private ChunkView OnCreateChunkView()
         {
             return Instantiate(chunkPrefab).GetComponent<ChunkView>();
         }
 
-        private void OnChunkViewReset(ChunkView view)
+        private void OnReturnChunkView(ChunkView view)
         {
             view.Unbind();
             view.gameObject.SetActive(false);
         }
 
-        private void OnChunkViewDestroy(ChunkView view)
+        private void OnDestroyChunkView(ChunkView view)
         {
             Destroy(view.gameObject);
         }

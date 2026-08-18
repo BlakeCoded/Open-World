@@ -181,13 +181,14 @@ namespace WorldGen.Terrain
             return vertices;
         }
 
-        public static void FillVerticies(Vector3[] vertices, float[] heights, int stride)
+        public static void FillVerticies(Vector3[] vertices, float[] heights, int verts, int stride)
         {
-            int verts = ChunkSettings.ChunkVerticies;
+            //int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
 
-            int index = 0;
             int heightIndex = 0;
             int borderedVerts = verts + 2;
+
+            int index = 0;
 
             for (int z = 0; z < verts; z++)
                 for (int x = 0; x < verts; x++)
@@ -200,9 +201,9 @@ namespace WorldGen.Terrain
                 }
         }
 
-        public static void FillNormals(Vector3[] normals, float[] heights, int stride)
+        public static void FillNormals(Vector3[] normals, float[] heights, int verts)
         {
-            int verts = ChunkSettings.ChunkVerticies;
+            //int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
             int borderedVerts = verts + 2;
 
             for (int z = 0; z < verts; z++)
