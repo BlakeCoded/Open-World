@@ -19,6 +19,7 @@ namespace WorldGen.Terrain
         readonly HashSet<Vector2Int> visibleChunks = new();
         readonly Queue<Vector2Int> buildQueue = new();
         readonly Queue<Vector2Int> colliderBuildQueue = new();
+        readonly List<MeshTicket> meshTickets = new();
 
         public int WorldSeed { get; private set; }
         public float SeedOffsetX;
@@ -44,14 +45,13 @@ namespace WorldGen.Terrain
             UpdateCameraChunk();
             RefreshWantedChunks();
             BuildQueuedChunks(batchAmountChunks);
+            FinalizeMeshTickets();
             BuildQueuedColliders(batchAmountColliders);
         }
 
         private void LateUpdate()
         {
             UpdateVisibility();
-
-            CleanUpViewPool();
         }
 
         private void InitalizeSeeds()
@@ -73,17 +73,6 @@ namespace WorldGen.Terrain
                 dispose: OnDestroyChunkView);
 
             chunkViewPool.PreWarm((chunkViewRadius * 2) + 1);
-        }
-
-        private float cleanUpTimer;
-        private void CleanUpViewPool()
-        {
-            cleanUpTimer -= Time.deltaTime;
-            if(cleanUpTimer < 0f)
-            {
-                chunkViewPool.Cleanup();
-                cleanUpTimer = 10f;
-            }
         }
 
         private Vector2Int WorldToCoord(Vector3 position)

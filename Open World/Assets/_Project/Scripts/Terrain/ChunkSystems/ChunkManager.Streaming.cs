@@ -1,8 +1,6 @@
-using Project.Singleton;
-using Unity.Mathematics;
 using UnityEngine;
-using UnityEngine.InputSystem;
-using UnityEngine.Profiling;
+using System.Collections.Generic;
+using Project.Singleton;
 
 namespace WorldGen.Terrain
 {
@@ -47,13 +45,15 @@ namespace WorldGen.Terrain
         {
             ChunkView view = chunkViewPool.Get();
 
-            var go = view.gameObject;
-            go.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
-            go.SetActive(true);
-
             var t = view.gameObject.transform;
             t.position = data.WorldPosition;
             t.SetParent(transform);
+
+            var go = view.gameObject;
+            go.name = $"Chunk_({data.Coord.x},{data.Coord.y})";
+            go.SetActive(true);
+            
+            view.Bind(data);
 
             int dx = Mathf.Abs(data.Coord.x - currentChunk.x);
             int dz = Mathf.Abs(data.Coord.y - currentChunk.y);
@@ -61,37 +61,11 @@ namespace WorldGen.Terrain
 
             var newLOD = GetChunkViewLOD(cd);
 
-            GenerateLOD(view, newLOD, data.Coord);
-
-            if(view.MeshCollider.sharedMesh == null && view.CurrentLOD == ChunkSettings.ColliderLevelOfDetail && 
-                cd <= ColliderBuildRadius && collidersToBuild.Add(data.Coord))
-            {
-                colliderBuildQueue.Enqueue(data.Coord);
-            }
-
-            view.Bind(data);
+            GenerateLOD(view, newLOD, data.Coord, noise);
 
             activeChunkViews[data.Coord] = view;
 
             return view;
-        }
-
-        private void GenerateLOD(ChunkView view, int lod, Vector2Int id)
-        {
-            var lodMeshData = view.GetLODMeshData(lod);
-
-            TerrainHeightGenerator.FillHeights(lodMeshData.Heights, lodMeshData.Verts, lodMeshData.Stride, id, Noise);
-            TerrainMeshGenerator.FillVerticies(lodMeshData.Vertices, lodMeshData.Heights, lodMeshData.Verts, lodMeshData.Stride);
-            //TerrainMeshGenerator.FillNormals(lodMeshData.Normals, lodMeshData.Heights, lodMeshData.Verts);
-
-            lodMeshData.GeneratedFor = id;
-            lodMeshData.Mesh.SetVertices(lodMeshData.Vertices);
-            //lodMeshData.Mesh.SetNormals(lodMeshData.Normals);
-            lodMeshData.Mesh.RecalculateNormals();
-            lodMeshData.Mesh.RecalculateBounds();
-
-            view.CurrentLOD = lod;
-            view.SetLOD(lod);
         }
 
         private ChunkData CreateChunkData(Vector2Int key)
@@ -115,6 +89,15 @@ namespace WorldGen.Terrain
             return chunk;
         }
 
+        private void GenerateLOD(ChunkView view, int lod, Vector2Int id, NoiseProfile noise)
+        {
+            var lodMeshData = view.GetLODMeshData(lod);
+
+            ScheduleHeightJob(lodMeshData, id, lod, noise);
+        }
+
+        private readonly List<Vector2Int> wantedOrder = new();
+
         private void RefreshWantedChunks()
         {
             timer -= Time.deltaTime;
@@ -122,39 +105,52 @@ namespace WorldGen.Terrain
             timer = updateInterval;
 
             wantedIds.Clear();
+            wantedOrder.Clear();
             removeIds.Clear();
 
-            for (int dx = -chunkViewRadius; dx <= chunkViewRadius; dx++)
-                for (int dz = -chunkViewRadius; dz <= chunkViewRadius; dz++)
+            for(int radius = 0; radius <= chunkViewRadius; radius++) // loops over closest chunks -> furthest
+            {
+                for(int disx = -radius; disx <= radius; disx++) // top / bottom rows
                 {
-                    var id = new Vector2Int(currentChunk.x + dx, currentChunk.y + dz);
-                    int cd = Mathf.Max(Mathf.Abs(dz), Mathf.Abs(dx));
-                    if (cd <= chunkViewRadius) wantedIds.Add(id);
+                    AddWantedChunk(disx, -radius);
+                    AddWantedChunk(disx, radius);
                 }
 
+                for(int disz = -radius + 1; disz <= radius - 1; disz++) // left / right
+                {
+                    AddWantedChunk(-radius, disz);
+                    AddWantedChunk(radius, disz);
+                }
+            }
+
             int keepChunkRadius = chunkViewRadius + 4;
+            int dx;
+            int dz;
+            int cd;
+            int newLOD;
+            ChunkView view;
 
             foreach (var id in activeIds)
             {
-                int dx = Mathf.Abs(id.x - currentChunk.x);
-                int dz = Mathf.Abs(id.y - currentChunk.y);
+                dx = Mathf.Abs(id.x - currentChunk.x);
+                dz = Mathf.Abs(id.y - currentChunk.y);
 
-                int cd = Mathf.Max(dx, dz);
+                cd = Mathf.Max(dx, dz);
 
-                var view = activeChunkViews[id];
-                var newLOD = GetChunkViewLOD(cd);
+                view = activeChunkViews[id];
+                newLOD = GetChunkViewLOD(cd);
 
                 if(view.CurrentLOD != newLOD)
                 {
-                    view.CurrentLOD = newLOD;
-
                     if (view.MeshData[newLOD].GeneratedFor != id)
                     {
-                        GenerateLOD(view, newLOD, id);
-                        view.MeshData[newLOD].GeneratedFor = id;
+                        GenerateLOD(view, newLOD, id, Noise);
                     }
-
-                    view.SetLOD(newLOD);
+                    else if(view.MeshData[newLOD].GeneratedFor == id)
+                    {
+                        view.CurrentLOD = newLOD;
+                        view.SetLOD(newLOD);
+                    }
                 }
 
                 if (view.MeshCollider.sharedMesh == null && cd <= ColliderBuildRadius && 
@@ -180,15 +176,15 @@ namespace WorldGen.Terrain
 
             foreach (var id in removeIds)
             {
-                var view = activeChunkViews[id];
+                var activeView = activeChunkViews[id];
 
-                chunkViewPool.Return(view);
+                chunkViewPool.Return(activeView);
 
                 activeChunkViews.Remove(id);
                 activeIds.Remove(id);
             }
 
-            foreach (var id in wantedIds)
+            foreach (var id in wantedOrder)
             {
                 if (chunkDataByID.TryGetValue(id, out var chunkData))
                 {
@@ -205,6 +201,13 @@ namespace WorldGen.Terrain
                     buildQueue.Enqueue(id);
                 }
             }
+        }
+
+        private void AddWantedChunk(int dx, int dz)
+        {
+            var id = new Vector2Int(currentChunk.x + dx, currentChunk.y + dz);
+
+            if(wantedIds.Add(id)) wantedOrder.Add(id);
         }
 
         private void BuildQueuedChunks(int batch)
@@ -224,9 +227,7 @@ namespace WorldGen.Terrain
                 var id = buildQueue.Dequeue();
                 if (activeIds.Contains(id)) continue;
 
-                Profiler.BeginSample("Build Chunk");
                 BuildChunk(id);
-                Profiler.EndSample();
                 UpdateChunkVisibilty(chunkDataByID[id]);
                 count++;
             }

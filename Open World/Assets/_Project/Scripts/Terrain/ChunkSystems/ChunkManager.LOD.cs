@@ -1,6 +1,5 @@
-using JetBrains.Annotations;
-using Project.Singleton;
 using UnityEngine;
+using Project.Singleton;
 
 
 namespace WorldGen.Terrain
@@ -11,11 +10,13 @@ namespace WorldGen.Terrain
         [Header("LOD")]
         [SerializeField] int lod1StartRadius = 4;
         [SerializeField] int lod2StartRadius = 10;
+        [SerializeField] int lod3StartRadius = 15;
 
         private int GetChunkViewLOD(int chunkDistance)
         {
             int lod = chunkDistance switch
             {
+                var d when d >= lod3StartRadius => 3,
                 var d when d >= lod2StartRadius => 2,
                 var d when d >= lod1StartRadius => 1,
                 _ => 0

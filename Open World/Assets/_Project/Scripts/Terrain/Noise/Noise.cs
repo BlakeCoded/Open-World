@@ -1,13 +1,15 @@
 using UnityEngine;
+using WorldGen.Terrain;
+using Unity.Mathematics;
 
 public static class Noise
 {
     public static float Sample(float x, float z)
     {
-        int x0 = Mathf.FloorToInt(x);
+        int x0 = (int)math.floor(x);
         int x1 = x0 + 1;
 
-        int z0 = Mathf.FloorToInt(z);
+        int z0 = (int)math.floor(z);
         int z1 = z0 + 1;
 
         float a = Hash(x0, z0);
@@ -78,5 +80,15 @@ public static class Noise
         }
 
         return total / amplitudeSum;
+    }
+
+    public static float SampleHeight(float worldX, float worldZ, NoiseSettings noise)
+    {
+        float noiseX = worldX * noise.Scale + noise.OffsetX;
+        float noiseZ = worldZ * noise.Scale + noise.OffsetZ;
+
+        float height = FractalNoise(noiseX, noiseZ, noise.Octaves, noise.Lacunarity, noise.Persistence) * noise.HeightMultiplier;
+
+        return height;
     }
 }

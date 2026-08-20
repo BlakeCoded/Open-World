@@ -1,4 +1,5 @@
 using System.Drawing;
+using Unity.Collections;
 using UnityEngine;
 
 namespace WorldGen.Terrain
@@ -138,17 +139,6 @@ namespace WorldGen.Terrain
             return mesh;
         }
 
-        public static Mesh CreateBaseMesh()
-        {
-            var mesh = new Mesh();
-
-            mesh.SetVertices(BaseVertices);
-            mesh.SetTriangles(Triangles, 0);
-            mesh.SetUVs(0, UVs);
-            mesh.RecalculateNormals();
-
-            return mesh;
-        }
         public static Mesh CreateBaseMesh(Vector3[] vertices, Vector3[] normals, int verts)
         {
             var mesh = new Mesh();
@@ -185,6 +175,24 @@ namespace WorldGen.Terrain
         {
             //int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
 
+            int heightIndex = 0;
+            int borderedVerts = verts + 2;
+
+            int index = 0;
+
+            for (int z = 0; z < verts; z++)
+                for (int x = 0; x < verts; x++)
+                {
+                    heightIndex = (z + 1) * borderedVerts + (x + 1);
+
+                    vertices[index].y = heights[heightIndex];
+
+                    index++;
+                }
+        }
+
+        public static void FillVerticiesFromNativeHeights(Vector3[] vertices, NativeArray<float> heights, int verts, int stride)
+        {
             int heightIndex = 0;
             int borderedVerts = verts + 2;
 

@@ -1,3 +1,4 @@
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -56,14 +57,10 @@ namespace WorldGen.Terrain
 
         public static float SampleHeight(float worldX, float worldZ, NoiseProfile noise)
         {
-            //Profiler.BeginSample("Fractal Noise");
-
             float noiseX = worldX * noise.Scale + ChunkManager.Instance.SeedOffsetX;
             float noiseZ = worldZ * noise.Scale + ChunkManager.Instance.SeedOffsetZ;
 
-            float height = Noise.FractalNoise(noiseX, noiseZ, noise.Octaves, noise.lacunarity, noise.Persistence) * noise.HeightMultiplier;
-
-            //Profiler.EndSample();
+            float height = Noise.FractalNoise(noiseX, noiseZ, noise.Octaves, noise.Lacunarity, noise.Persistence) * noise.HeightMultiplier;
 
             return height;
         }

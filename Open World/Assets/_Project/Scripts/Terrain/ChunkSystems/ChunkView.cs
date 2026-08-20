@@ -9,10 +9,10 @@ public class ChunkView : MonoBehaviour
     public MeshFilter[] MeshFilters { get; private set; }
     public MeshCollider MeshCollider { get; private set; }
     public int CurrentLOD = -1;
+    int activeRenderIndex = -1;
 
     [SerializeField] Material terrainMaterial;
 
-    int activeRenderIndex = -1;
 
     private void Awake()
     {
@@ -41,12 +41,12 @@ public class ChunkView : MonoBehaviour
             MeshData[i] = md;
         }
 
-        //terrainMaterial = new Material(terrainMaterial)
-        //{
-        //    color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
-        //};
+        terrainMaterial = new Material(terrainMaterial)
+        {
+            color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
+        };
 
-        foreach(var mr in MeshRenderers)
+        foreach (var mr in MeshRenderers)
         {
             mr.sharedMaterial = terrainMaterial;
         }
@@ -62,6 +62,9 @@ public class ChunkView : MonoBehaviour
     public void Unbind()
     {
         MeshCollider.sharedMesh = null;
+
+        MeshFilters[0].sharedMesh = null;
+        MeshFilters[1].sharedMesh = null;
 
         Data = null;
     }
