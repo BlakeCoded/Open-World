@@ -8,7 +8,7 @@ namespace WorldGen.Terrain
     {
         public static float[] CreateHeights(Vector2Int chunkCoord, int stride, NoiseProfile noise)
         {
-            float size = ChunkSettings.ChunkSizeInUnits;
+            float size = ChunkSettings.SizeInUnits;
             int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
             int borderedVerts = verts + 2;
 
@@ -35,7 +35,7 @@ namespace WorldGen.Terrain
 
         public static void FillHeights(float[] heights, int verts, int stride, Vector2Int chunkCoord, NoiseProfile noise)
         {
-            float size = ChunkSettings.ChunkSizeInUnits;
+            float size = ChunkSettings.SizeInUnits;
             //int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
 
             float fullStep = size / (ChunkSettings.ChunkVerticies - 1);

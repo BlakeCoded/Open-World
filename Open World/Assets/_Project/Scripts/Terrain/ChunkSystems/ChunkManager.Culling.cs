@@ -38,7 +38,7 @@ namespace WorldGen.Terrain
             lastCameraPos = camPos;
             lastCameraRot = camRotation;
 
-            foreach(var id in activeIds)
+            foreach(var id in activeChunkIds)
             {
                 if(chunkDataByID.TryGetValue(id, out var chunk))
                 {
@@ -89,9 +89,9 @@ namespace WorldGen.Terrain
             activeChunkViews[chunk.Coord].SetVisible(visible);
         }
 
-        static readonly Vector3 ChunkExtents = new Vector3(ChunkSettings.ChunkSizeInUnits * 0.5f,
+        static readonly Vector3 ChunkExtents = new Vector3(ChunkSettings.SizeInUnits * 0.5f,
                                                            50f,
-                                                           ChunkSettings.ChunkSizeInUnits * 0.5f);
+                                                           ChunkSettings.SizeInUnits * 0.5f);
 
         static readonly float ex = ChunkExtents.x;
         static readonly float ey = ChunkExtents.y;

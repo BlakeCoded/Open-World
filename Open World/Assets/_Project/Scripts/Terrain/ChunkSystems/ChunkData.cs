@@ -6,10 +6,9 @@ namespace WorldGen.Terrain
     {
         public Vector2Int Coord;
         public Vector3 WorldPosition;
-        public ChunkCullData CullData;
+        public CullData CullData;
 
         // Unused
-        public int CurrentLOD = -1;
         public bool Modified;
     }
 }

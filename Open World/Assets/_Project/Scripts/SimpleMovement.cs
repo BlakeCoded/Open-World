@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using WorldGen.Terrain;
 
 public class SimpleMovement : MonoBehaviour
 {
@@ -12,6 +13,8 @@ public class SimpleMovement : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
     }
+
+    float timer;
 
     private void Update()
     {
@@ -33,13 +36,34 @@ public class SimpleMovement : MonoBehaviour
         // Move
         if (keyboard.wKey.isPressed)
         {
-            //transform.position += transform.forward * moveSpeed * Time.deltaTime;
-            rb.AddForce(transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
+            transform.position += transform.forward * moveSpeed * Time.deltaTime;
+            //rb.AddForce(transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
         }
         else if (keyboard.sKey.isPressed)
         {
-            //transform.position -= transform.forward * moveSpeed * Time.deltaTime;
-            rb.AddForce(-transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
+            transform.position -= transform.forward * moveSpeed * Time.deltaTime;
+            //rb.AddForce(-transform.forward * moveSpeed * Time.deltaTime, ForceMode.Impulse);
         }
+
+        if(keyboard.spaceKey.isPressed)
+        {
+            transform.position += transform.up * moveSpeed * Time.deltaTime;
+        }
+        else if (keyboard.shiftKey.isPressed)
+        {
+            transform.position -= transform.up * moveSpeed * Time.deltaTime;
+        }
+
+        if (keyboard.tKey.isPressed)
+        {
+            if (timer <= 0)
+            {
+                ChunkManager.Instance.OnReload();
+                gameObject.transform.SetPositionAndRotation(new Vector3(Random.Range(-100000, 100000), 30f, Random.Range(-100000, 100000)), Quaternion.identity);
+                timer = 5f;
+            }
+        }
+
+        timer -= Time.deltaTime;
     }
 }

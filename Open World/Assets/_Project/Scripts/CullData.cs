@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public struct ChunkCullData
+public struct CullData
 {
     public Vector3 Center;
     public float Radius;

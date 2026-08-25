@@ -1,22 +1,21 @@
+using System;
 using Unity.Collections;
 using Unity.Jobs;
+using Unity.Mathematics;
 using UnityEngine;
 
 public class MeshTicket
 {
-    public Vector2Int ChunkID;
-    public int LOD;
-    public NativeArray<float> Heights;
-    //public NativeArray<Vector3> Vertices;
-    //public NativeArray<Vector3> Normals;
-    public JobHandle Handle;
-    public MeshTicketState State;
-}
+    public Vector2Int ID;
+    public uint GenerationID;
 
-public enum MeshTicketState
-{
-    GeneratingHeights,
-    GeneratingVertices,
-    GeneratingNormals,
-    Completed
+    public Mesh Mesh;
+
+    public NativeArray<float> Heights;
+    public NativeArray<float3> Vertices;
+    public NativeArray<float3> Normals;
+
+    public JobHandle Handle;
+
+    public Action<MeshTicket> OnComplete;
 }

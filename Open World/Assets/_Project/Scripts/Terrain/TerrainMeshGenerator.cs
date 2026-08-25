@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Drawing;
 using Unity.Collections;
 using UnityEngine;
@@ -6,16 +7,8 @@ namespace WorldGen.Terrain
 {
     public static class TerrainMeshGenerator
     {
-        public static readonly Vector3[] BaseVertices;
-        public static readonly int[] Triangles;
-        public static readonly Vector2[] UVs;
-
-        static TerrainMeshGenerator()
-        {
-            BaseVertices = CreateBaseVerticies(ChunkSettings.ChunkSizeInUnits, ChunkSettings.ChunkVerticies);
-            Triangles = CreateTriangles(ChunkSettings.ChunkVerticies);
-            UVs = CreateUVs(ChunkSettings.ChunkVerticies);
-        }
+        private static readonly Dictionary<int, Mesh> lodBaseMesh = new Dictionary<int, Mesh>();
+        private static Mesh TerrainMesh;
 
         public static Mesh CreateMeshTriangle()
         {
@@ -110,54 +103,55 @@ namespace WorldGen.Terrain
             return mesh;
         }
 
-        public static Mesh CreateMeshTerrain(float size, int verts, float[] heights)
+        public static Mesh CreateBaseMesh(int verts, int stride)
         {
-            Mesh mesh = new Mesh(); // Can Store Meshes in a pool and reuses
+            if(!lodBaseMesh.TryGetValue(stride, out var mesh))
+            {
+                mesh = new Mesh();
 
-            int index = 0;
-            int heightIndex = 0;
-            int borderedVerts = verts + 2;
+                Vector3[] vertices = new Vector3[verts * verts];
 
-            Vector3[] vertices = new Vector3[verts * verts]; // can get each view object to store a reusesable array to minimize allocations
+                FillVerticiesBase(vertices, verts, ChunkSettings.SizeInUnits);
+                var triangles = CreateTriangles(verts);
+                var uvs = CreateUVs(verts, ChunkSettings.SizeInUnits, ChunkSettings.TextureScale);
 
-            for (int z = 0; z < verts; z++)
-                for (int x = 0; x < verts; x++)
-                {
-                    heightIndex = (z + 1) * borderedVerts + (x + 1);
+                mesh.SetVertices(vertices);
+                mesh.SetTriangles(triangles, 0);
+                mesh.SetUVs(0, uvs);
 
-                    vertices[index] = BaseVertices[index];
-                    vertices[index].y = heights[heightIndex];
+                lodBaseMesh.Add(stride, mesh);
 
-                    index++;
-                }
+                return Object.Instantiate(mesh);
+            }
 
-            mesh.vertices = vertices;
-            mesh.triangles = Triangles;
-            mesh.SetUVs(0, UVs);
-            //mesh.normals = CalculateNormals(verts, heights);
-
-            return mesh;
+            return Object.Instantiate(mesh);
         }
 
-        public static Mesh CreateBaseMesh(Vector3[] vertices, Vector3[] normals, int verts)
+        public static Mesh CreateBaseTerrainMesh(int verts, float meshSize)
         {
-            var mesh = new Mesh();
+            if(TerrainMesh == null)
+            {
+                var mesh = new Mesh();
 
-            FillVerticiesBase(vertices, verts);
-            var triangles = CreateTriangles(verts);
-            var uvs = CreateUVs(verts);
+                Vector3[] vertices = new Vector3[verts * verts];
 
-            mesh.SetVertices(vertices);
-            mesh.SetTriangles(triangles, 0);
-            mesh.SetUVs(0, uvs);
+                FillVerticiesBase(vertices, verts, meshSize);
+                var triangles = CreateTriangles(verts);
+                var uvs = CreateUVs(verts, meshSize, ChunkSettings.TextureScale);
 
-            return mesh;
+                mesh.SetVertices(vertices);
+                mesh.SetTriangles(triangles, 0);
+                mesh.SetUVs(0, uvs);
+
+                TerrainMesh = mesh;
+                return Object.Instantiate(mesh);
+            }
+
+            return Object.Instantiate(TerrainMesh);
         }
 
-        public static Vector3[] FillVerticiesBase(Vector3[] vertices, int verts)
+        public static Vector3[] FillVerticiesBase(Vector3[] vertices, int verts, float size)
         {
-            float size = ChunkSettings.ChunkSizeInUnits;
-
             float step = size / (verts - 1);
 
             int index = 0;
@@ -289,6 +283,30 @@ namespace WorldGen.Terrain
 
             float inv = 1f / (verts - 1);
 
+            int index;
+
+            for (int z = 0; z < verts; z++)
+            {
+                for (int x = 0; x < verts; x++)
+                {
+                    index = z * verts + x;
+
+                    uvs[index] = new Vector2(
+                        x * inv,
+                        z * inv);
+                }
+            }
+
+            return uvs;
+        }
+
+        private static Vector2[] CreateUVs(int verts, float meshSize, float textureScale)
+        {
+            Vector2[] uvs = new Vector2[verts * verts];
+
+            float worldStep = meshSize / (verts - 1);
+            float uvStep = worldStep / textureScale;
+
             for (int z = 0; z < verts; z++)
             {
                 for (int x = 0; x < verts; x++)
@@ -296,8 +314,8 @@ namespace WorldGen.Terrain
                     int index = z * verts + x;
 
                     uvs[index] = new Vector2(
-                        x * inv,
-                        z * inv);
+                        x * uvStep,
+                        z * uvStep);
                 }
             }
 

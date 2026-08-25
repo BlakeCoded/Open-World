@@ -13,8 +13,7 @@ public class ChunkView : MonoBehaviour
 
     [SerializeField] Material terrainMaterial;
 
-
-    private void Awake()
+    public void Configure()
     {
         MeshData = new LODMeshData[ChunkSettings.MeshLevelsOfDetail];
         MeshRenderers = GetComponentsInChildren<MeshRenderer>();
@@ -25,26 +24,20 @@ public class ChunkView : MonoBehaviour
         {
             int stride = 1 << i;
             int verts = (ChunkSettings.ChunkVerticies - 1) / stride + 1;
-            int borderedVerts = verts + 2;
 
             var md = new LODMeshData()
             {
-                Vertices = new Vector3[verts * verts],
-                Normals = new Vector3[verts * verts],
-                Heights = new float[borderedVerts * borderedVerts],
                 Stride = stride,
                 Verts = verts
             };
 
-            md.Mesh = TerrainMeshGenerator.CreateBaseMesh(md.Vertices, md.Normals, md.Verts);
-
             MeshData[i] = md;
         }
 
-        terrainMaterial = new Material(terrainMaterial)
-        {
-            color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
-        };
+        //terrainMaterial = new Material(terrainMaterial)
+        //{
+        //    color = new Color(Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f), Random.Range(0.0f, 1.0f))
+        //};
 
         foreach (var mr in MeshRenderers)
         {
@@ -56,7 +49,7 @@ public class ChunkView : MonoBehaviour
     {
         Data = data;
 
-        //MeshRenderer.enabled = data.CullData.Visible; // Enable this line of code for better editor performance
+        //MeshRenderers[0].enabled = data.CullData.Visible; // Enable this line of code for better editor performance
     }
 
     public void Unbind()
@@ -69,8 +62,17 @@ public class ChunkView : MonoBehaviour
         Data = null;
     }
 
+    public Mesh GetOrCreateMesh(LODMeshData data)
+    {
+        if(data.Mesh == null)
+            data.Mesh = TerrainMeshGenerator.CreateBaseMesh(data.Verts, data.Stride);
+
+        return data.Mesh;
+    }
+
     public void SetLOD(int lod)
     {
+        CurrentLOD = lod;
         MeshFilters[0].sharedMesh = MeshData[lod].Mesh;
     }
 
@@ -98,6 +100,6 @@ public class ChunkView : MonoBehaviour
 
     public void SetVisible(bool visible)
     {
-        //MeshRenderer.enabled = visible; // Enable this line of code for better editor performance
+        //MeshRenderers[0].enabled = visible; // Enable this line of code for better editor performance
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using Project.Singleton;
 using Unity.Collections;
 using Unity.Jobs;
@@ -9,19 +10,19 @@ namespace WorldGen.Terrain
     // ChunkManager.Jobs.cs
     public partial class ChunkManager : MonoBehaviourSingleton<ChunkManager>
     {
-        private void ScheduleHeightJob(LODMeshData data, Vector2Int id, int lod, NoiseProfile noise)
+        private MeshTicket ScheduleMeshJobs(Vector2Int id, float2 worldOrigin, Mesh mesh, int maxDetailVerts, int verts, int stride, float size, NoiseProfile noise)
         {
-            int borderedVerts = data.Verts + 2;
-            var heights = new NativeArray<float>(borderedVerts * borderedVerts, Allocator.TempJob);
+            int borderedVerts = verts + 2;
+            var heights = new NativeArray<float>(borderedVerts * borderedVerts, Allocator.Persistent);
 
-            HeightsJob job = new HeightsJob()
+            HeightsJob Hjob = new HeightsJob()
             {
                 Heights = heights,
-                MaxDetailVerts = ChunkSettings.ChunkVerticies,
-                Verts = borderedVerts,
-                Stride = data.Stride,
-                SizeInWorldUnits = ChunkSettings.ChunkSizeInUnits,
-                ChunkID = new float2(id.x, id.y),
+                MaxDetailVerts = maxDetailVerts,
+                BorderedVerts = borderedVerts,
+                Stride = stride,
+                SizeInWorldUnits = size,
+                WorldOrigin = worldOrigin,
                 NoiseSettings = new NoiseSettings
                 {
                     Scale = noise.Scale,
@@ -34,64 +35,84 @@ namespace WorldGen.Terrain
                 }
             };
 
-            JobHandle heightJob = job.Schedule(borderedVerts * borderedVerts, 64);
+            JobHandle heightHandle = Hjob.Schedule(borderedVerts * borderedVerts, 64);
+
+            var vertices = new NativeArray<float3>(verts * verts, Allocator.Persistent);
+
+            VertexJob Vjob = new VertexJob()
+            {
+                Heights = heights,
+                Vertices = vertices,
+                SizeInWorldUnits = size,
+                Verts = verts,
+                Stride = stride,
+            };
+
+            JobHandle vertexHandle = Vjob.Schedule(verts * verts, 64, heightHandle);
+
+            var normals = new NativeArray<float3>(verts * verts, Allocator.Persistent);
+
+            NormalsJob Njob = new NormalsJob()
+            {
+                Heights = heights,
+                Normals = normals,
+                SizeInWorldUnits = size,
+                Verts = verts,
+                Stride = stride
+            };
+
+            JobHandle normalHandle = Njob.Schedule(verts * verts, 64, heightHandle);
+
+            JobHandle meshHandle = JobHandle.CombineDependencies(vertexHandle, normalHandle);
 
             var ticket = new MeshTicket()
             {
-                ChunkID = id,
-                LOD = lod,
+                ID = id,
+                GenerationID = generationID,
                 Heights = heights,
-                Handle = heightJob,
-                State = MeshTicketState.GeneratingHeights
+                Vertices = vertices,
+                Normals = normals,
+                Handle = meshHandle,
+                Mesh = mesh,
             };
 
-            meshTickets.Add(ticket);
+            return ticket;
         }
 
         private void FinalizeMeshTickets()
         {
-            int count = 0;
+            float startTime = Time.realtimeSinceStartup;
 
             for (int i = meshTickets.Count - 1; i >= 0; i--)
             {
-                if (count >= 5) break;
+                if (Time.realtimeSinceStartup - startTime > 0.01f) break;
 
                 var t = meshTickets[i];
                 if (!t.Handle.IsCompleted) continue;
 
                 t.Handle.Complete();
 
-                if (!activeChunkViews.TryGetValue(t.ChunkID, out var view))
+                if(t.GenerationID != generationID)
                 {
                     t.Heights.Dispose();
+                    t.Vertices.Dispose();
+                    t.Normals.Dispose();
                     meshTickets.RemoveAt(i);
                     continue;
                 }
 
-                var lodMeshData = view.GetLODMeshData(t.LOD);
+                t.Mesh.SetVertices(t.Vertices);
+                t.Mesh.SetNormals(t.Normals);
+                t.Mesh.RecalculateBounds();
 
-                TerrainMeshGenerator.FillVerticiesFromNativeHeights(lodMeshData.Vertices, t.Heights, lodMeshData.Verts, lodMeshData.Stride);
-
-                lodMeshData.GeneratedFor = t.ChunkID;
-                lodMeshData.Mesh.SetVertices(lodMeshData.Vertices);
-                lodMeshData.Mesh.RecalculateNormals();
-                lodMeshData.Mesh.RecalculateBounds();
-
-                int dx = Mathf.Abs(t.ChunkID.x - currentChunk.x);
-                int dz = Mathf.Abs(t.ChunkID.y - currentChunk.y);
-                int cd = Mathf.Max(dx, dz);
-
-                if (view.MeshCollider.sharedMesh == null && view.CurrentLOD == ChunkSettings.ColliderLevelOfDetail &&
-                cd <= ColliderBuildRadius && collidersToBuild.Add(t.ChunkID))
-                {
-                    colliderBuildQueue.Enqueue(t.ChunkID);
-                }
-
-                view.CurrentLOD = t.LOD;
-                view.SetLOD(t.LOD);
+                t.OnComplete?.Invoke(t);
 
                 t.Heights.Dispose();
+                t.Vertices.Dispose();
+                t.Normals.Dispose();
                 meshTickets.RemoveAt(i);
+
+                meshesLoaded++;
             }
         }
     }

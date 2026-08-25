@@ -4,9 +4,10 @@ namespace WorldGen.Terrain
 {
     public static class ChunkSettings 
     {
-        public const int ChunkSizeInUnits = 50;
-        public const int ChunkVerticies = 129;
-        public const int MeshLevelsOfDetail = 4;
-        public const int ColliderLevelOfDetail = 0;
+        public static float SizeInUnits;
+        public static int ChunkVerticies;
+        public static int MeshLevelsOfDetail;
+        public static int ColliderLevelOfDetail;
+        public static float TextureScale;
     }
 }

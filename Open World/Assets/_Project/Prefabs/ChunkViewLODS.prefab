@@ -282,4 +282,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunkViewLODS
   CurrentLOD: -1
-  terrainMaterial: {fileID: 2100000, guid: cc6fa2c3701fce14a816cf4bbb685692, type: 2}
+  terrainMaterial: {fileID: 2100000, guid: 0070300bb2ad4974f89a170f3e2273da, type: 2}
