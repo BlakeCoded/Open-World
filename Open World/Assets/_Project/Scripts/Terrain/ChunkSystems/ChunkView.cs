@@ -10,7 +10,7 @@ public class ChunkView : MonoBehaviour
     public MeshCollider MeshCollider { get; private set; }
     public int CurrentLOD = -1;
     int activeRenderIndex = -1;
-
+    public bool IsVisible = false;
     [SerializeField] Material terrainMaterial;
 
     public void Configure()
@@ -87,10 +87,7 @@ public class ChunkView : MonoBehaviour
 
     public void BakeMeshCollider()
     {
-        if (MeshCollider.sharedMesh == null)
-        {
             MeshCollider.sharedMesh = MeshData[ChunkSettings.ColliderLevelOfDetail].Mesh;
-        }
     }
 
     public LODMeshData GetLODMeshData(int lod)

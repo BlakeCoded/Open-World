@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using Project.Singleton;
 using Unity.Mathematics;
+using JetBrains.Annotations;
 
 namespace WorldGen.Terrain
 {
@@ -10,30 +11,22 @@ namespace WorldGen.Terrain
     {
         [Header("Streaming")]
         [SerializeField] TerrainStreamingProfile StreamProfile;
-        [SerializeField] float updateInterval = 0.25f;
         [SerializeField] float cullPadding = 2f;
         private Camera cam;
-        private float timer;
         private Vector2Int currentChunk = new Vector2Int(int.MinValue, int.MaxValue);
-        private Vector2Int currentTerrainRegion = new Vector2Int(int.MinValue, int.MaxValue);
+        private Vector2Int previousChunk = new Vector2Int(int.MinValue, int.MaxValue);
 
         public void SetStreamingSettings(TerrainStreamingProfile settings) => StreamProfile = settings;
 
-        private bool UpdateCameraChunkRegion()
+        private bool UpdateCameraChunk()
         {
             var hasChanged = false;
 
             var newChunk = WorldToChunkCoord(camPos);
             if (newChunk != currentChunk)
             {
+                previousChunk = currentChunk;
                 currentChunk = newChunk;
-                hasChanged = true;
-            }
-
-            var newRegion = WorldToTerrainCoord(camPos);
-            if (newRegion != currentTerrainRegion)
-            {
-                currentTerrainRegion = newRegion;
                 hasChanged = true;
             }
 
@@ -53,21 +46,6 @@ namespace WorldGen.Terrain
             }
 
             activeChunkIds.Add(key);
-        }
-
-        private void BuildTerrain(Vector2Int key)
-        {
-            if(!terrainDataByID.TryGetValue(key, out TerrainData data))
-            {
-                data = CreateTerrainData(key);
-            }
-
-            if(!activeTerrainViews.TryGetValue(key, out TerrainView view))
-            {
-                view = CreateTerrainView(data, Noise);
-            }
-
-            activeTerrainIds.Add(key);
         }
 
         private ChunkView CreateChunkView(ChunkData data, NoiseProfile noise)
@@ -97,29 +75,7 @@ namespace WorldGen.Terrain
             return view;
         }
 
-        private TerrainView CreateTerrainView(TerrainData data, NoiseProfile noise)
-        {
-            TerrainView view = terrainViewPool.Get();
-
-            var t = view.gameObject.transform;
-            t.position = data.WorldPosition;
-            t.SetParent(transform);
-
-            var go = view.gameObject;
-            go.name = $"Terrain_({data.RegionID.x},{data.RegionID.y})";
-            go.SetActive(true);
-
-            view.Bind(data);
-
-            GenerateTerrain(view, data.RegionID, noise);
-
-            activeTerrainViews[data.RegionID] = view;
-
-            return view;
-        }
-
         private ChunkData CreateChunkData(Vector2Int key)
-
         {
             var worldPosition = ChunkCoordToWorld(key);
 
@@ -142,281 +98,319 @@ namespace WorldGen.Terrain
             return chunk;
         }
 
-        private TerrainData CreateTerrainData(Vector2Int key)
-        {
-            var worldPosition = TerrainCoordToWorld(key);
-
-            var size = TerrainSettings.SizeInUnits;
-
-            var terrain = new TerrainData
-            {
-                RegionID = key,
-                WorldPosition = worldPosition,
-                CullData = new CullData
-                {
-                    Visible = false,
-                    Center = new Vector3(worldPosition.x + size * 0.5f + cullPadding, 50f, worldPosition.z + size * 0.5f + cullPadding),
-                    Radius = new Vector3(size * 0.5f, 50f, size * 0.5f).magnitude
-                }
-            };
-
-            terrainDataByID[key] = terrain;
-
-            return terrain;
-        }
-
         private void GenerateChunkLOD(ChunkView view, int lod, Vector2Int id, NoiseProfile noise)
         {
             var lodMeshData = view.GetLODMeshData(lod);
 
             view.GetOrCreateMesh(lodMeshData);
 
-            float2 worldOrigin = new float2(id.x * ChunkSettings.SizeInUnits, id.y * ChunkSettings.SizeInUnits);
-
-            var ticket = ScheduleMeshJobs(id, worldOrigin, lodMeshData.Mesh, ChunkSettings.ChunkVerticies, lodMeshData.Verts, lodMeshData.Stride, ChunkSettings.SizeInUnits, noise);
+            var ticket = ScheduleMeshJobs(id, lodMeshData.Mesh, ChunkSettings.ChunkVerticies, lodMeshData.Verts, lodMeshData.Stride, ChunkSettings.SizeInUnits, noise);
 
             ticket.OnComplete = t =>
             {
-                OnChunkMeshCompleted(ticket, id, lod);
+                OnChunkMeshCompleted(ticket, lod);
             };
 
             meshTickets.Add(ticket);
         }
 
-        private void GenerateTerrain(TerrainView view, Vector2Int id, NoiseProfile noise)
+        private void GenerateChunks()
         {
-            float2 worldOrigin = new float2(id.x * TerrainSettings.SizeInUnits, id.y * TerrainSettings.SizeInUnits);
-
-            var ticket = ScheduleMeshJobs(id, worldOrigin, view.Mesh, TerrainSettings.TerrainVerticies, TerrainSettings.TerrainVerticies, 1, TerrainSettings.SizeInUnits, noise);
-
-            ticket.OnComplete = OnTerrainMeshCompleted;
-
-            meshTickets.Add(ticket);
-        }
-
-        private void RefreshWantedChunks(bool update)
-        {
-            timer -= Time.deltaTime;
-            if (timer >= 0f || update == false) return;
-            timer = updateInterval;
-
             wantedChunkIds.Clear();
             wantedChunkOrder.Clear();
-            removeChunkIds.Clear();
 
-            int chunkViewRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
+            int viewRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
+            int min = -viewRadius;
+            int max = viewRadius - 1;
 
-            for(int radius = 0; radius <= chunkViewRadius; radius++) // loops over closest chunks -> furthest
+            for (int radius = 0; radius <= viewRadius; radius++)
             {
-                for(int disx = -radius; disx <= radius; disx++) // top / bottom rows
+                int minX = Mathf.Max(-radius, min);
+                int maxX = Mathf.Min(radius, max);
+
+                int minZ = Mathf.Max(-radius, min);
+                int maxZ = Mathf.Min(radius, max);
+
+                for (int x = minX; x <= maxX; x++)
                 {
-                    AddWantedChunk(disx, -radius);
-                    AddWantedChunk(disx, radius);
+                    AddWantedChunk(x, minZ);
+                    AddWantedChunk(x, maxZ);
                 }
 
-                for(int disz = -radius + 1; disz <= radius - 1; disz++) // left / right
+                for (int z = minZ + 1; z <= maxZ - 1; z++)
                 {
-                    AddWantedChunk(-radius, disz);
-                    AddWantedChunk(radius, disz);
+                    AddWantedChunk(minX, z);
+                    AddWantedChunk(maxX, z);
                 }
-            }
-
-            int dx;
-            int dz;
-            int cd;
-            int newLOD;
-            ChunkView view;
-
-            foreach (var id in activeChunkIds)
-            {
-                dx = Mathf.Abs(id.x - currentChunk.x);
-                dz = Mathf.Abs(id.y - currentChunk.y);
-                cd = Mathf.Max(dx, dz);
-
-                view = activeChunkViews[id];
-                newLOD = GetChunkViewLOD(cd);
-
-                if(view.CurrentLOD != newLOD)
-                {
-                    if (view.MeshData[newLOD].GeneratedFor != id)
-                    {
-                        GenerateChunkLOD(view, newLOD, id, Noise);
-                    }
-                    else if(view.MeshData[newLOD].GeneratedFor == id)
-                    {
-                        view.SetLOD(newLOD);
-                    }
-                }
-
-                if (view.MeshCollider.sharedMesh == null && cd <= StreamProfile.QualitySettings.ChunkColliderBuildRadius && 
-                    view.CurrentLOD == ChunkSettings.ColliderLevelOfDetail && collidersToBuild.Add(id))
-                {
-                    colliderBuildQueue.Enqueue(id);
-                }
-
-                if (cd <= chunkViewRadius)
-                {
-                    if(!view.gameObject.activeSelf) view.gameObject.SetActive(true);
-                }
-                else if (cd <= StreamProfile.StreamingSettings.ChunkKeepRadius)
-                {
-                    if (view.gameObject.activeSelf) view.gameObject.SetActive(false);
-                }
-                else
-                {
-                    removeChunkIds.Add(id);
-                }
-            }
-                
-
-            foreach (var id in removeChunkIds)
-            {
-                view = activeChunkViews[id];
-
-                chunkViewPool.Return(view);
-
-                activeChunkViews.Remove(id);
-                activeChunkIds.Remove(id);
             }
 
             foreach (var id in wantedChunkOrder)
             {
-                if (chunkDataByID.TryGetValue(id, out var chunkData))
-                {
-                    if(activeChunkIds.Add(id))
-                    {
-                        CreateChunkView(chunkData, Noise);
-                        continue;
-                    }
-
-                    view = activeChunkViews[id];
-
-                    if (!view.gameObject.activeSelf) view.gameObject.SetActive(true);
-                }
-                else if(queuedChunkIds.Add(id))
+                if(queuedChunkIds.Add(id))
                 {
                     chunkBuildQueue.Enqueue(id);
                 }
             }
         }
 
-        //private void RefreshWantedTerrain()
-        //{
-        //    wantedTerrainIds.Clear();
-        //    wantedTerrainOrder.Clear();
-        //    removeTerrainIds.Clear();
-
-        //    int terrainRadius = StreamProfile.StreamingSettings.TerrrainViewRadius;
-        //    int chunkRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
-
-        //    int totalRadiusInChunks = chunkRadius + (terrainRadius * TerrainSettings.TerrainRegionSizeInChunks);
-
-        //    for(int z = -totalRadiusInChunks; z <= totalRadiusInChunks; z++)
-        //    {
-        //        for(int x = -totalRadiusInChunks; x <= totalRadiusInChunks; x++)
-        //        {
-        //            int cd = Mathf.Max(Mathf.Abs(x), Mathf.Abs(z));
-
-        //            if (cd <= chunkRadius) continue;
-
-        //            int chunkX = currentChunk.x + x;
-        //            int chunkZ = currentChunk.y + z;
-
-        //            var regionID = ChunkIDToTerrainRegion(chunkX, chunkZ);
-                    
-        //            wantedTerrainIds.Add(regionID);
-        //        }
-        //    }
-
-        //    int keepRadius = totalRadiusInChunks + StreamProfile.StreamingSettings.TerrrainKeepRadius;
-
-        //    foreach (var id in activeTerrainIds)
-        //    {
-        //        var centerChunkID = TerrainIdToCenterChunkId(id, TerrainSettings.TerrainRegionSizeInChunks);
-
-        //        int dx = Mathf.Abs(centerChunkID.x - currentChunk.x);
-        //        int dz = Mathf.Abs(centerChunkID.y - currentChunk.y);
-        //        int distance = Mathf.Max(dx, dz);
-
-        //        var view = activeTerrainViews[id];
-
-        //        if(distance <= chunkRadius)
-        //        {
-        //            removeTerrainIds.Add(id);
-        //        }
-        //        else if(distance <= totalRadiusInChunks)
-        //        {
-        //            if (!view.gameObject.activeSelf) view.gameObject.SetActive(true);
-        //        }
-        //        else if(distance < keepRadius)
-        //        {
-        //            if (view.gameObject.activeSelf) view.gameObject.SetActive(false);
-        //        }
-        //        else
-        //        {
-        //            removeTerrainIds.Add(id);
-        //        }
-        //    }
-
-        //    foreach(var id in removeTerrainIds)
-        //    {
-        //        var view = activeTerrainViews[id];
-
-        //        terrainViewPool.Return(view);
-
-        //        activeTerrainViews.Remove(id);
-        //        activeTerrainIds.Remove(id);
-        //    }
-
-        //    foreach (var id in wantedTerrainIds)
-        //    {
-        //        if(terrainDataByID.TryGetValue(id, out var terrainData))
-        //        {
-        //            if (activeTerrainIds.Add(id))
-        //            {
-        //                CreateTerrainView(terrainData, Noise);
-        //                continue;
-        //            }
-
-        //            var view = activeTerrainViews[id];
-
-        //            if (!view.gameObject.activeSelf) view.gameObject.SetActive(true);
-        //        }
-        //        else if(queuedTerrainIds.Add(id))
-        //        {
-        //            terrainBuildQueue.Enqueue(id);
-        //        }
-        //    }
-        //}
-
-        private Vector2Int ChunkIDToTerrainRegion(int x, int z)
+        private void RefreshChunkDelta()
         {
-            int size = TerrainSettings.TerrainRegionSizeInChunks;
+            var updateChunks = UpdateCameraChunk();
+            if (!updateChunks) return;
 
-            int regionX = Mathf.FloorToInt((float)x / size);
-            int regionZ = Mathf.FloorToInt((float)z / size);
+            wantedChunkIds.Clear();
+            wantedChunkOrder.Clear();
+            removeChunkIds.Clear();
 
-            return new Vector2Int(regionX, regionZ);
+            int currentX = currentChunk.x;
+            int currentZ = currentChunk.y;
+            int previousX = previousChunk.x;
+            int previousZ = previousChunk.y;
+            int deltaX = currentX - previousX;
+            int deltaZ = currentZ - previousZ;
+
+            int viewRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
+            int min = -viewRadius;
+            int max = viewRadius - 1;
+
+            switch (deltaX) // if moving right / left
+            {
+                case 1:
+                    for (int z = min; z <= max; z++)
+                    {
+                        // remove chunk in left column
+                        AddToRemoveChunk(previousX + min, previousZ + z);
+
+                        // add chunks in right column
+                        AddWantedChunk(currentX + max, currentZ + z);
+                    }
+                    break;
+                case -1:
+                    for (int z = min; z <= max; z++)
+                    {
+                        // remove chunks in right column
+                        AddToRemoveChunk(previousX + max, previousZ + z);
+
+                        // add chunks to left column
+                        AddWantedChunk(currentX + min, currentZ + z);
+                    }
+                    break;
+            }
+
+            switch (deltaZ) // if moving up / down
+            {
+                case 1:
+                    for (int x = min; x <= max; x++)
+                    {
+                        // remove chunks in bottom row
+                        AddToRemoveChunk(previousX + x, previousZ + min);
+
+                        // add chunks to top row
+                        AddWantedChunk(currentX + x, currentZ + max);
+                    }
+                    break;
+                case -1:
+                    for (int x = min; x <= max; x++)
+                    {
+                        // remove chunks in top row
+                        AddToRemoveChunk(previousX + x, previousZ + max);
+
+                        // add chunks to bottom row
+                        AddWantedChunk(currentX + x, currentZ + min);
+                    }
+                    break;
+            }
+
+            foreach(var id in removeChunkIds)
+            {
+                var view = activeChunkViews[id];
+
+                chunkViewPool.Return(view);
+
+                activeChunkViews.Remove(id);
+                activeChunkIds.Remove(id);
+            }
+            
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD0MaxDistance);
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD0MaxDistance + 1);
+
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD1MaxDistance);
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD1MaxDistance + 1);
+
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD2MaxDistance);
+            CheckLODBoundary(StreamProfile.QualitySettings.LOD2MaxDistance + 1);
+
+            CheckColliderBoundary(StreamProfile.QualitySettings.ChunkColliderBuildRadius);
         }
-
-        //private Vector2Int TerrainIdToCenterChunkId(Vector2Int id, int chunksPerTerrainRegion)
-        //{
-        //    return new Vector2Int(id.x * chunksPerTerrainRegion + chunksPerTerrainRegion / 2,
-        //                          id.y * chunksPerTerrainRegion + chunksPerTerrainRegion / 2);
-        //}
-
-        //private void AddWantedTerrain(int dx, int dz)
-        //{
-        //    var id = new Vector2Int(currentTerrainRegion.x + dx, currentTerrainRegion.y + dz);
-
-        //    if (wantedTerrainIds.Add(id)) wantedTerrainOrder.Add(id);
-        //}
 
         private void AddWantedChunk(int dx, int dz)
         {
-            var id = new Vector2Int(currentChunk.x + dx, currentChunk.y + dz);
+            var id = new Vector2Int(dx, dz);
 
-            if(wantedChunkIds.Add(id)) wantedChunkOrder.Add(id);
+            if(wantedChunkIds.Add(id))
+            {
+                wantedChunkOrder.Add(id);
+                ProcessWantedChunk(id);
+            }
+        }
+
+        private void AddToRemoveChunk(int dx, int dz)
+        {
+            var id = new Vector2Int(dx, dz);
+
+            ProcessChunkRemoval(id);
+        }
+
+        private void CheckLODBoundary(int radius)
+        {
+            for(int x = -radius; x <= radius; x++) // top bottom
+            {
+                CheckLOD(currentChunk.x + x, currentChunk.y + radius);
+                CheckLOD(currentChunk.x + x, currentChunk.y - radius);
+            }
+
+            for(int z  = -radius - 1; z <= radius - 1; z++) // left right
+            {
+                CheckLOD(currentChunk.x - radius, currentChunk.y + z);
+                CheckLOD(currentChunk.x + radius, currentChunk.y + z);
+            }
+        }
+
+        private void CheckColliderBoundary(int radius)
+        {
+            for(int x = -radius; x <= radius; x++) // top bottom
+            {
+                CheckCollider(currentChunk.x + x, currentChunk.y + radius);
+                CheckCollider(currentChunk.x + x, currentChunk.y - radius);
+            }
+
+            for (int z = -radius - 1; z <= radius - 1; z++) // left right
+            {
+                CheckCollider(currentChunk.x - radius, currentChunk.y + z);
+                CheckCollider(currentChunk.x + radius, currentChunk.y + z);
+            }
+        }
+
+        private void CheckCollider(int x, int z)
+        {
+            var id = new Vector2Int(x, z);
+
+            if (!activeChunkViews.TryGetValue(id, out var view)) return;
+
+            int dx = x - currentChunk.x;
+            int dz = z - currentChunk.y;
+
+            if (dx < 0) dx = -dx;
+            if (dz < 0) dz = -dz;
+
+            int distance = dx > dz ? dx : dz;
+
+            int colliderRadius = StreamProfile.QualitySettings.ChunkColliderBuildRadius;
+
+            if (distance > colliderRadius) return;
+
+            if (view.MeshCollider.sharedMesh != null) return;
+
+            if (collidersToBuild.Add(id)) colliderBuildQueue.Enqueue(id);
+        }
+
+        private void CheckLOD(int x, int z)
+        {
+            var id = new Vector2Int(x, z);
+
+            if (!activeChunkViews.TryGetValue(id, out var view)) return;
+
+            int dx = x - currentChunk.x;
+            int dz = z - currentChunk.y;
+
+            if(dx < 0) dx = -dx;
+            if(dz < 0) dz = -dz;
+
+            int distance = dx > dz ? dx : dz;
+
+            int newLOD = GetChunkViewLOD(distance);
+
+            if (view.CurrentLOD == newLOD) return;
+
+            if (view.MeshData[newLOD].GeneratedFor != id)
+            {
+                GenerateChunkLOD(view, newLOD, id, Noise);
+            }
+            else
+            {
+                view.SetLOD(newLOD);
+            }
+        }
+
+        private void ProcessChunkRemoval(Vector2Int id)
+        {
+            if(!activeChunkViews.TryGetValue(id, out var view)) return;
+
+            int dx = id.x - currentChunk.x;
+            int dz = id.y - currentChunk.y;
+
+            if (dx < 0) dx = -dx;
+            if (dz < 0) dz = -dz;
+
+            int distance = dx > dz ? dx : dz;
+
+            int keepRadius = StreamProfile.StreamingSettings.ChunkViewRadius + StreamProfile.StreamingSettings.ChunkKeepRadius;
+
+            if (distance > keepRadius)
+            {
+                removeChunkIds.Add(id);
+                return;
+            }
+
+            if(view.IsVisible != false)
+            {
+                view.IsVisible = false;
+                view.gameObject.SetActive(false);
+            }
+        }
+
+        private void ProcessWantedChunk(Vector2Int id)
+        {
+            if(!activeChunkViews.TryGetValue(id, out var view))
+            {
+                if(!chunkDataByID.TryGetValue(id, out var chunkData))
+                {
+                    if(queuedChunkIds.Add(id))
+                    {
+                        chunkBuildQueue.Enqueue(id);
+                    }
+
+                    return;
+                }
+
+                activeChunkIds.Add(id);
+                CreateChunkView(chunkData, Noise);
+
+                view = activeChunkViews[id];
+            }
+
+            int dx = id.x - currentChunk.x;
+            int dz = id.y - currentChunk.y;
+
+            if(dx < 0) dx = -dx;
+            if(dz < 0) dz = -dz;
+
+            int distance = dx > dz ? dx : dz;
+
+            UpdateChunkVisibilty(view, id, distance);
+        }
+
+        private void UpdateChunkVisibilty(ChunkView view, Vector2Int id, int distance)
+        {
+            int viewRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
+
+            bool inView = distance <= viewRadius;
+
+            if(view.IsVisible != inView)
+            {
+                view.IsVisible = inView;
+                view.gameObject.SetActive(inView);
+            }
         }
 
         private void BuildQueuedChunks()
@@ -427,6 +421,9 @@ namespace WorldGen.Terrain
             int dx;
             int dz;
             int cd;
+            int currentX = currentChunk.x;
+            int currentZ = currentChunk.y;
+            int viewRadius = StreamProfile.StreamingSettings.ChunkViewRadius;
 
             while (chunkBuildQueue.Count > 0)
             {
@@ -435,34 +432,19 @@ namespace WorldGen.Terrain
                 id = chunkBuildQueue.Dequeue();
                 if (activeChunkIds.Contains(id)) continue;
 
-                dx = Mathf.Abs(id.x - currentChunk.x);
-                dz = Mathf.Abs(id.y - currentChunk.y);
-                cd = Mathf.Max(dx, dz);
+                dx = id.x - currentX;
+                if (dx < 0) dx = -dx;
+                dz = id.y - currentZ;
+                if (dz < 0) dz = -dz;
 
-                if (cd > StreamProfile.StreamingSettings.ChunkViewRadius) continue;
+                cd = dx > dz ? dx : dz;
+
+                if (cd > viewRadius) continue;
 
                 BuildChunk(id);
                 UpdateChunkVisibilty(chunkDataByID[id]);
             }
         }
-
-        //private void BuildQueuedTerrain()
-        //{
-        //    float startTime = Time.realtimeSinceStartup;
-
-        //    Vector2Int id;
-
-        //    while (terrainBuildQueue.Count > 0)
-        //    {
-        //        if (Time.realtimeSinceStartup - startTime > 0.01f) break;
-
-        //        id = terrainBuildQueue.Dequeue();
-        //        if (activeTerrainIds.Contains(id)) continue;
-
-        //        BuildTerrain(id);
-        //        //terrainLoaded++;
-        //    }
-        //}
 
         private void BuildQueuedColliders()
         {
@@ -472,6 +454,9 @@ namespace WorldGen.Terrain
             int dx;
             int dz;
             int cd;
+            int currentX = currentChunk.x;
+            int currentZ = currentChunk.y;
+            int colliderRadius = StreamProfile.QualitySettings.ChunkColliderBuildRadius;
 
             while (colliderBuildQueue.Count > 0)
             {
@@ -481,15 +466,15 @@ namespace WorldGen.Terrain
                 collidersToBuild.Remove(id);
 
                 if (!activeChunkViews.TryGetValue(id, out var view)) continue;
-                
-                dx = Mathf.Abs(id.x - currentChunk.x);
-                dz = Mathf.Abs(id.y - currentChunk.y);
 
-                cd = Mathf.Max(dx, dz);
+                dx = id.x - currentX;
+                if (dx < 0) dx = -dx;
+                dz = id.y - currentZ;
+                if (dz < 0) dz = -dz;
 
-                if (cd > StreamProfile.QualitySettings.ChunkColliderBuildRadius) continue;
+                cd = dx > dz ? dx : dz;
 
-                if (view.MeshCollider.sharedMesh != null) continue;
+                if (cd > colliderRadius) continue;
 
                 view.BakeMeshCollider();
             }

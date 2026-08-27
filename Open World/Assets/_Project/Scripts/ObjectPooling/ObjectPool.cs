@@ -70,18 +70,12 @@ public class ObjectPool<T> where T : class
 
     public void Cleanup()
     {
-        if (items.Count <= MAX_POOL_SIZE) return;
-
         for (int i = items.Count - 1; i >= 0; i--)
         {
-            if (items.Count <= MAX_POOL_SIZE) break;
-
             var item = items[i];
 
             if (item.InUse)
                 continue;
-
-            Debug.Log("Destroying Pooled Chunk View");
 
             dispose?.Invoke(item.Item);
             items.RemoveAt(i);

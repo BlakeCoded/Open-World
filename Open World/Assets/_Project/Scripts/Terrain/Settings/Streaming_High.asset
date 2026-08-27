@@ -15,13 +15,13 @@ MonoBehaviour:
   QualitySettings:
     ChunkVerts: 129
     ChunkLODCount: 4
+    LOD0MaxDistance: 5
+    LOD1MaxDistance: 10
+    LOD2MaxDistance: 20
     ChunkColliderBuildRadius: 3
     ColliderLevelOfDetail: 0
     TextureScale: 50
   StreamingSettings:
-    ChunkViewRadius: 12
+    ChunkViewRadius: 32
     ChunkKeepRadius: 2
     ChunkSizeInUnits: 50
-    TerrrainViewRadius: 5
-    TerrrainKeepRadius: 1
-    TerrainRegionSizeInChunks: 8

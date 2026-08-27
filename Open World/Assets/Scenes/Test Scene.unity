@@ -609,14 +609,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunkManager
   StreamProfile: {fileID: 11400000, guid: 86cd210fae1aa5541bed067cafbf263a, type: 2}
-  updateInterval: 0.25
-  cullPadding: 0.2
+  cullPadding: 0.1
   generateSeed: 0
   WorldSeed: 0
   SeedOffsetX: 0
   SeedOffsetZ: 0
   chunkPrefab: {fileID: 8337293679961548116, guid: a4a2622476a70504aa4863c978456634, type: 3}
-  terrainPrefab: {fileID: 3765320089114218806, guid: 3ca8a4639b5cc0e4989c98f9ec8abefb, type: 3}
   Noise:
     Octaves: 4
     Scale: 0.0005
@@ -1114,7 +1112,7 @@ Rigidbody:
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0
-  m_IsKinematic: 0
+  m_IsKinematic: 1
   m_Interpolate: 0
   m_Constraints: 112
   m_CollisionDetection: 2

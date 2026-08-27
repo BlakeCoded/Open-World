@@ -10,10 +10,13 @@ public class MeshTicket
     public uint GenerationID;
 
     public Mesh Mesh;
+    public Mesh.MeshData meshData;
 
     public NativeArray<float> Heights;
     public NativeArray<float3> Vertices;
     public NativeArray<float3> Normals;
+    public NativeReference<float> minHeight;
+    public NativeReference<float> maxHeight;
 
     public JobHandle Handle;
 
