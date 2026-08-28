@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Drawing;
 using Unity.Collections;
+using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace WorldGen.Terrain
 {
@@ -109,15 +111,54 @@ namespace WorldGen.Terrain
             {
                 mesh = new Mesh();
 
-                Vector3[] vertices = new Vector3[verts * verts];
+                TerrainVertex[] vertexData = new TerrainVertex[verts * verts];
 
-                FillVerticiesBase(vertices, verts, ChunkSettings.SizeInUnits);
+                var positions = CreateBaseVertices(verts, ChunkSettings.SizeInUnits);
                 var triangles = CreateTriangles(verts);
                 var uvs = CreateUVs(verts, ChunkSettings.SizeInUnits, ChunkSettings.TextureScale);
+                var normals = CalculateNormals(verts);
 
-                mesh.SetVertices(vertices);
-                mesh.SetTriangles(triangles, 0);
-                mesh.SetUVs(0, uvs);
+                for(int i  = 0; i < vertexData.Length; i++)
+                {
+                    vertexData[i] = new TerrainVertex
+                    {
+                        Position = positions[i],
+                        Normal = normals[i],
+                        UV = uvs[i]
+                    };
+                }
+
+                mesh.SetVertexBufferParams(
+                    vertexData.Length,
+
+                    new VertexAttributeDescriptor(
+                        VertexAttribute.Position,
+                        VertexAttributeFormat.Float32,
+                        3,
+                        0
+                    ),
+
+                    new VertexAttributeDescriptor(
+                        VertexAttribute.Normal,
+                        VertexAttributeFormat.Float32,
+                        3,
+                        0
+                    ),
+
+                    new VertexAttributeDescriptor(
+                        VertexAttribute.TexCoord0,
+                        VertexAttributeFormat.Float32,
+                        2,
+                        0
+                    )
+                );
+
+                mesh.SetVertexBufferData(vertexData, 0, 0, vertexData.Length);
+                mesh.SetIndexBufferParams(triangles.Length, IndexFormat.UInt32);
+                mesh.SetIndexBufferData(triangles, 0, 0, triangles.Length);
+
+                mesh.subMeshCount = 1;
+                mesh.SetSubMesh(0, new SubMeshDescriptor(0, triangles.Length, MeshTopology.Triangles));
 
                 lodBaseMesh.Add(stride, mesh);
 
@@ -133,15 +174,15 @@ namespace WorldGen.Terrain
             {
                 var mesh = new Mesh();
 
-                Vector3[] vertices = new Vector3[verts * verts];
-
-                FillVerticiesBase(vertices, verts, meshSize);
+                var vertices = CreateBaseVertices(verts, meshSize);
                 var triangles = CreateTriangles(verts);
                 var uvs = CreateUVs(verts, meshSize, ChunkSettings.TextureScale);
+                var normals = CalculateNormals(verts);
 
                 mesh.SetVertices(vertices);
                 mesh.SetTriangles(triangles, 0);
                 mesh.SetUVs(0, uvs);
+                mesh.SetNormals(normals);
 
                 TerrainMesh = mesh;
                 return Object.Instantiate(mesh);
@@ -150,11 +191,13 @@ namespace WorldGen.Terrain
             return Object.Instantiate(TerrainMesh);
         }
 
-        public static Vector3[] FillVerticiesBase(Vector3[] vertices, int verts, float size)
+        public static Vector3[] CreateBaseVertices(int verts, float size)
         {
             float step = size / (verts - 1);
 
             int index = 0;
+
+            var vertices = new Vector3[verts * verts];
 
             for (int z = 0; z < verts; z++)
                 for (int x = 0; x < verts; x++)
@@ -350,6 +393,21 @@ namespace WorldGen.Terrain
                     ).normalized;
 
                     normals[z * verts + x] = normal;
+                }
+            }
+
+            return normals;
+        }
+
+        public static Vector3[] CalculateNormals(int verts)
+        {
+            Vector3[] normals = new Vector3[verts * verts];
+
+            for (int z = 0; z < verts; z++)
+            {
+                for (int x = 0; x < verts; x++)
+                {
+                    normals[z * verts + x] = Vector3.up;
                 }
             }
 

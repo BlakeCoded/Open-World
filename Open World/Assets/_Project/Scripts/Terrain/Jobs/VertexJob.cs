@@ -8,6 +8,7 @@ public struct VertexJob : IJobParallelFor
 {
     [ReadOnly] public NativeArray<float> Heights;
     [WriteOnly] public NativeArray<float3> Vertices;
+    //public NativeArray<TerrainVertex> Vertices;
     public float SizeInWorldUnits;
     public int Stride;
     public int Verts;
@@ -23,5 +24,11 @@ public struct VertexJob : IJobParallelFor
         int heightIndex = (z + 1) * borderedVerts + (x + 1);
 
         Vertices[index] = new float3(x * step, Heights[heightIndex], z * step);
+
+        //var vertex = Vertices[index];
+
+        //vertex.Position = new float3(x * step, Heights[heightIndex], z * step);
+
+        //Vertices[index] = vertex;
     }
 }

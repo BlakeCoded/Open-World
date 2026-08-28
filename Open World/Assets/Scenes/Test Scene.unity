@@ -617,8 +617,8 @@ MonoBehaviour:
   chunkPrefab: {fileID: 8337293679961548116, guid: a4a2622476a70504aa4863c978456634, type: 3}
   Noise:
     Octaves: 4
-    Scale: 0.0005
-    Persistence: 0.6
+    Scale: 0.001
+    Persistence: 0.2
     Lacunarity: 3
     HeightMultiplier: 200
   timeSampler: {fileID: 99879147}

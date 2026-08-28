@@ -159,8 +159,8 @@ namespace WorldGen.Terrain
 
             var meshData = view.GetLODMeshData(lod);
 
-            var centerY = (t.maxHeight.Value + t.minHeight.Value) * 0.5f;
-            var height = t.maxHeight.Value - t.minHeight.Value;
+            var centerY = (t.MinMaxHeight.Value.x + t.MinMaxHeight.Value.y) * 0.5f;
+            var height = t.MinMaxHeight.Value.x - t.MinMaxHeight.Value.y;
             var size = ChunkSettings.SizeInUnits;
 
             meshData.Mesh.bounds = new Bounds(

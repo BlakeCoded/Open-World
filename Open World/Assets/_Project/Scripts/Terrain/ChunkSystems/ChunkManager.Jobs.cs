@@ -1,10 +1,9 @@
-using System;
 using Project.Singleton;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Profiling;
 using UnityEngine;
-using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 
 namespace WorldGen.Terrain
@@ -41,45 +40,51 @@ namespace WorldGen.Terrain
 
             JobHandle heightHandle = Hjob.Schedule(borderedVerts * borderedVerts, 64);
 
-            NativeReference<float> minHeight = new NativeReference<float>(Allocator.Persistent);
-            NativeReference<float> maxHeight = new NativeReference<float>(Allocator.Persistent);
+            NativeReference<float2> minMax = new NativeReference<float2>(Allocator.Persistent);
 
             MinMaxHeightJob minMaxHeightJob = new MinMaxHeightJob()
             {
                 Heights = heights,
-                minHeight = minHeight,
-                maxHeight = maxHeight,
+                MinMax = minMax,
             };
 
             JobHandle minMaxHandle = minMaxHeightJob.Schedule(heightHandle);
+
+            //Mesh.MeshDataArray meshDataArray = Mesh.AllocateWritableMeshData(mesh);
+
+            //Mesh.MeshData meshData = meshDataArray[0];
+
+            //var vertexData = meshData.GetVertexData<TerrainVertex>(0);
 
             var vertices = new NativeArray<float3>(verts * verts, Allocator.Persistent);
 
             VertexJob Vjob = new VertexJob()
             {
                 Heights = heights,
+                //Vertices = vertexData,
                 Vertices = vertices,
                 SizeInWorldUnits = size,
                 Verts = verts,
                 Stride = stride,
             };
 
-            JobHandle vertexHandle = Vjob.Schedule(verts * verts, 64, minMaxHandle);
+            JobHandle vertexHandle = Vjob.Schedule(verts * verts, 64, heightHandle);
 
             var normals = new NativeArray<float3>(verts * verts, Allocator.Persistent);
 
             NormalsJob Njob = new NormalsJob()
             {
                 Heights = heights,
+                //Vertices = vertexData,
                 Normals = normals,
                 SizeInWorldUnits = size,
                 Verts = verts,
                 Stride = stride
             };
 
-            JobHandle normalHandle = Njob.Schedule(verts * verts, 64, minMaxHandle);
+            JobHandle normalHandle = Njob.Schedule(verts * verts, 64, heightHandle);
 
-            JobHandle meshHandle = JobHandle.CombineDependencies(vertexHandle, normalHandle);
+            JobHandle meshHandle = JobHandle.CombineDependencies(vertexHandle, normalHandle, minMaxHandle);
 
             var ticket = new MeshTicket()
             {
@@ -89,8 +94,8 @@ namespace WorldGen.Terrain
                 Heights = heights,
                 Vertices = vertices,
                 Normals = normals,
-                minHeight = minHeight,
-                maxHeight = maxHeight,
+                //meshDataArray = meshDataArray,
+                MinMaxHeight = minMax,
                 Handle = meshHandle,
             };
 
@@ -106,6 +111,7 @@ namespace WorldGen.Terrain
                 if (Time.realtimeSinceStartup - startTime > 0.01f) break;
 
                 var t = meshTickets[i];
+
                 if (!t.Handle.IsCompleted) continue;
 
                 t.Handle.Complete();
@@ -113,61 +119,39 @@ namespace WorldGen.Terrain
                 if(t.GenerationID != generationID)
                 {
                     t.Heights.Dispose();
+
                     t.Vertices.Dispose();
                     t.Normals.Dispose();
-                    t.minHeight.Dispose();
-                    t.maxHeight.Dispose();
+                    //t.meshDataArray.Dispose();
+
+                    t.MinMaxHeight.Dispose();
                     meshTickets.RemoveAt(i);
                     continue;
                 }
 
+                //using (new ProfilerMarker("Apply Mesh Data").Auto())
+                //{
+                //    Mesh.ApplyAndDisposeWritableMeshData(t.meshDataArray, t.Mesh);  
+                //}
+
+                //using (new ProfilerMarker("Apply Mesh Data").Auto())
+                //{
+                //    t.Mesh.SetVertices(t.Vertices);
+                //    t.Mesh.SetNormals(t.Normals);
+                //}
+
                 t.Mesh.SetVertices(t.Vertices);
                 t.Mesh.SetNormals(t.Normals);
-                //t.Mesh.RecalculateBounds();
-
                 t.OnComplete?.Invoke(t);
 
                 t.Heights.Dispose();
                 t.Vertices.Dispose();
                 t.Normals.Dispose();
-                t.minHeight.Dispose();
-                t.maxHeight.Dispose();
+                t.MinMaxHeight.Dispose();
                 meshTickets.RemoveAt(i);
 
                 meshesLoaded++;
             }
-        }
-
-        public static Mesh CreateTestMeshData(int verts)
-        {
-            Mesh.MeshDataArray meshDataArray = Mesh.AllocateWritableMeshData(1);
-
-            Mesh.MeshData meshData = meshDataArray[0];
-
-            int vertexCount = verts * verts;
-
-            meshData.SetVertexBufferParams(
-                vertexCount,
-                new VertexAttributeDescriptor(VertexAttribute.Position,
-                VertexAttributeFormat.Float32,
-                3),
-                new VertexAttributeDescriptor(
-                    VertexAttribute.Normal,
-                    VertexAttributeFormat.Float32,
-                    3),
-                new VertexAttributeDescriptor(
-                    VertexAttribute.TexCoord0,
-                    VertexAttributeFormat.Float32,
-                    2
-                ));
-
-            meshData.SetIndexBufferParams((verts - 1) * (verts - 1) * 6, IndexFormat.UInt32);
-
-            Mesh mesh = new Mesh();
-
-            Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh);
-
-            return mesh;
         }
     }
 }

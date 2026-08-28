@@ -8,6 +8,7 @@ public struct NormalsJob : IJobParallelFor
 {
     [ReadOnly] public NativeArray<float> Heights;
     [WriteOnly] public NativeArray<float3> Normals;
+    //public NativeArray<TerrainVertex> Vertices;
     public float SizeInWorldUnits;
     public int Verts;
     public int Stride;
@@ -34,5 +35,11 @@ public struct NormalsJob : IJobParallelFor
         float3 vertical = bottom - top;
 
         Normals[index] = math.normalize(math.cross(vertical, horizontal));
+
+        //var vertex = Vertices[index];
+
+        //vertex.Normal = math.normalize(math.cross(vertical, horizontal));
+
+        //Vertices[index] = vertex;
     }
 }

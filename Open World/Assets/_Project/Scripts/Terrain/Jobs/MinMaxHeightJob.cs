@@ -7,8 +7,7 @@ using Unity.Mathematics;
 public struct MinMaxHeightJob : IJob
 {
     [ReadOnly] public NativeArray<float> Heights;
-    public NativeReference<float> minHeight;
-    public NativeReference<float> maxHeight;
+    public NativeReference<float2> MinMax;
     public void Execute()
     {
         float min = float.MaxValue; 
@@ -22,7 +21,6 @@ public struct MinMaxHeightJob : IJob
             max = math.max(max, value);
         }
 
-        minHeight.Value = min;
-        maxHeight.Value = max;
+        MinMax.Value = new float2(min, max);
     }
 }
